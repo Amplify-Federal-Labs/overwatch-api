@@ -8,6 +8,8 @@ const mockInsert = vi.fn();
 const mockExistsBySourceLink = vi.fn();
 const mockFetchFpdsContracts = vi.fn();
 const mockEntriesToSignals = vi.fn();
+const mockFetchGovConWireRss = vi.fn();
+const mockRssItemsToSignals = vi.fn();
 
 vi.mock("./signal-analyzer", () => ({
 	SignalAnalyzer: class MockSignalAnalyzer {
@@ -28,6 +30,14 @@ vi.mock("./fpds-contracts-fetcher", () => ({
 
 vi.mock("./fpds-contracts-parser", () => ({
 	entriesToSignals: (...args: unknown[]) => mockEntriesToSignals(...args),
+}));
+
+vi.mock("./govconwire-rss-fetcher", () => ({
+	fetchGovConWireRss: (...args: unknown[]) => mockFetchGovConWireRss(...args),
+}));
+
+vi.mock("./govconwire-rss-parser", () => ({
+	rssItemsToSignals: (...args: unknown[]) => mockRssItemsToSignals(...args),
 }));
 
 function makeEnv(overrides?: Partial<Env>): Env {
@@ -81,9 +91,13 @@ describe("SignalIngestor.ingest", () => {
 		mockExistsBySourceLink.mockReset();
 		mockFetchFpdsContracts.mockReset();
 		mockEntriesToSignals.mockReset();
+		mockFetchGovConWireRss.mockReset();
+		mockRssItemsToSignals.mockReset();
 		mockExistsBySourceLink.mockResolvedValue(false);
 		mockFetchFpdsContracts.mockResolvedValue([]);
 		mockEntriesToSignals.mockReturnValue([]);
+		mockFetchGovConWireRss.mockResolvedValue([]);
+		mockRssItemsToSignals.mockReturnValue([]);
 	});
 
 	it("should return an ingestion result with sources and signals counts", async () => {

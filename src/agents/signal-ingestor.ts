@@ -3,6 +3,8 @@ import { SignalAnalyzer } from "./signal-analyzer";
 import { SignalRepository } from "../db/signal-repository";
 import { fetchFpdsContracts } from "./fpds-contracts-fetcher";
 import { entriesToSignals } from "./fpds-contracts-parser";
+import { fetchGovConWireRss } from "./govconwire-rss-fetcher";
+import { rssItemsToSignals } from "./govconwire-rss-parser";
 
 const SOURCE_TYPES: readonly SignalSourceType[] = [
 	"sam_gov",
@@ -61,8 +63,9 @@ export class SignalIngestor {
 		switch (sourceType) {
 			case "fpds":
 				return entriesToSignals(await fetchFpdsContracts(fetch));
-			case "sam_gov":
 			case "rss":
+				return rssItemsToSignals(await fetchGovConWireRss(fetch));
+			case "sam_gov":
 			case "mil_announcement":
 				// TODO: implement these source connectors
 				return [];
