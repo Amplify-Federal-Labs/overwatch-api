@@ -31,3 +31,34 @@ export const signalEntities = sqliteTable("signal_entities", {
 	value: text("value").notNull(),
 	confidence: real("confidence").notNull(),
 });
+
+export const discoveredEntities = sqliteTable("discovered_entities", {
+	id: integer("id").primaryKey({ autoIncrement: true }).notNull(),
+	signalId: text("signal_id").notNull().references(() => signals.id, { onDelete: "cascade" }),
+	type: text("type").notNull(),
+	value: text("value").notNull(),
+	confidence: real("confidence").notNull(),
+	signalRelevance: integer("signal_relevance").notNull(),
+	status: text("status").notNull().default("pending"),
+	createdAt: text("created_at").notNull(),
+});
+
+export const stakeholders = sqliteTable("stakeholders", {
+	id: text("id").primaryKey().notNull(),
+	type: text("type").notNull().default("person"),
+	name: text("name").notNull(),
+	title: text("title").notNull().default(""),
+	org: text("org").notNull().default(""),
+	branch: text("branch").notNull().default(""),
+	stage: text("stage").notNull().default("unknown"),
+	confidence: text("confidence").notNull().default("low"),
+	programs: text("programs", { mode: "json" }).notNull().$type<string[]>().default([]),
+	focusAreas: text("focus_areas", { mode: "json" }).notNull().$type<string[]>().default([]),
+	rank: text("rank"),
+	education: text("education", { mode: "json" }).notNull().$type<string[]>().default([]),
+	careerHistory: text("career_history", { mode: "json" }).notNull().$type<{ role: string; org: string; years: string }[]>().default([]),
+	bioSourceUrl: text("bio_source_url"),
+	discoveredEntityId: integer("discovered_entity_id").references(() => discoveredEntities.id),
+	signalIds: text("signal_ids", { mode: "json" }).notNull().$type<string[]>().default([]),
+	createdAt: text("created_at").notNull(),
+});

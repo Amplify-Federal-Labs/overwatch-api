@@ -79,8 +79,50 @@ ${input.content}
 
 	private parseResponse(raw: string): SignalAnalysisResult {
 		const cleaned = this.stripMarkdownFences(raw);
-		const parsed: unknown = JSON.parse(cleaned);
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(cleaned);
+		} catch {
+			parsed = JSON.parse(this.repairTruncatedJson(cleaned));
+		}
 		return this.validateResult(parsed);
+	}
+
+	private repairTruncatedJson(json: string): string {
+		let repaired = json.trimEnd();
+
+		// Close any unterminated string
+		const quoteCount = (repaired.match(/(?<!\\)"/g) ?? []).length;
+		if (quoteCount % 2 !== 0) {
+			repaired += '"';
+		}
+
+		// Walk the string to find unclosed brackets/braces
+		const stack: string[] = [];
+		let inString = false;
+		for (let i = 0; i < repaired.length; i++) {
+			const ch = repaired[i];
+			if (ch === "\\" && inString) {
+				i++; // skip escaped character
+				continue;
+			}
+			if (ch === '"') {
+				inString = !inString;
+				continue;
+			}
+			if (inString) continue;
+			if (ch === "{" || ch === "[") stack.push(ch);
+			if (ch === "}") stack.pop();
+			if (ch === "]") stack.pop();
+		}
+
+		// Close any remaining open brackets/braces in reverse order
+		while (stack.length > 0) {
+			const opener = stack.pop();
+			repaired += opener === "{" ? "}" : "]";
+		}
+
+		return repaired;
 	}
 
 	private stripMarkdownFences(text: string): string {

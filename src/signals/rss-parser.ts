@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 import type { SignalAnalysisInput } from "../schemas";
 
-export interface GovConWireRssItem {
+export interface RssItem {
 	title: string;
 	link: string;
 	pubDate: string;
@@ -35,7 +35,7 @@ function stripHtml(html: string): string {
 		.trim();
 }
 
-export function parseGovConWireRss(xml: string): GovConWireRssItem[] {
+export function parseRssFeed(xml: string): RssItem[] {
 	let parsed: Record<string, unknown>;
 	try {
 		parsed = rssParser.parse(xml) as Record<string, unknown>;
@@ -73,7 +73,7 @@ export function parseGovConWireRss(xml: string): GovConWireRssItem[] {
 	});
 }
 
-export function rssItemsToSignals(items: GovConWireRssItem[]): SignalAnalysisInput[] {
+export function rssItemsToSignals(items: RssItem[], sourceName: string): SignalAnalysisInput[] {
 	return items.map((item) => {
 		const lines: string[] = [item.title];
 		if (item.pubDate) lines.push(`Date: ${item.pubDate}`);
@@ -83,7 +83,7 @@ export function rssItemsToSignals(items: GovConWireRssItem[]): SignalAnalysisInp
 		return {
 			content: lines.join("\n"),
 			sourceType: "rss" as const,
-			sourceName: "GovConWire",
+			sourceName,
 			sourceLink: item.link,
 			sourceUrl: item.guid || undefined,
 		};

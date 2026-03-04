@@ -1,0 +1,26 @@
+import { SignalIngestor } from "../signals/signal-ingestor";
+import { EntityEnricher } from "../enrichment/entity-enricher";
+
+export interface CronJob {
+	name: string;
+	run: (env: Env) => Promise<unknown>;
+}
+
+export const CRON_JOBS: readonly CronJob[] = [
+	{
+		name: "fpds",
+		run: (env) => new SignalIngestor(env).ingest(["fpds"]),
+	},
+	{
+		name: "rss",
+		run: (env) => new SignalIngestor(env).ingest(["rss"]),
+	},
+	{
+		name: "enrichment",
+		run: (env) => new EntityEnricher(env).enrichPending(),
+	},
+] as const;
+
+export function getScheduledJob(utcHour: number): CronJob {
+	return CRON_JOBS[utcHour % CRON_JOBS.length];
+}

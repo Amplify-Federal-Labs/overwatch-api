@@ -2,7 +2,7 @@ import type { Stakeholder } from "../schemas";
 
 export const mockStakeholders: Stakeholder[] = [
 	{
-		id: "st1", name: "Col. David Park", title: "Program Director", org: "645th AESG", branch: "Air Force",
+		id: "st1", type: "person", name: "Col. David Park", title: "Program Director", org: "645th AESG", branch: "Air Force",
 		stage: "aware", confidence: "high",
 		contact: { email: "david.park.3@us.af.mil", phone: "(210) 395-4821", address: "Bldg 1610, Lackland AFB, San Antonio, TX 78236" },
 		programs: ["DevSecOps Pipeline Modernization", "Platform One Migration"],
@@ -47,7 +47,7 @@ export const mockStakeholders: Stakeholder[] = [
 		},
 	},
 	{
-		id: "st2", name: "CAPT Jennifer Walsh", title: "Contracting Officer", org: "NIWC PAC", branch: "Navy",
+		id: "st2", type: "person", name: "CAPT Jennifer Walsh", title: "Contracting Officer", org: "NIWC PAC", branch: "Navy",
 		stage: "unknown", confidence: "high",
 		contact: { email: "jennifer.m.walsh@navy.mil", phone: "(619) 553-3120", address: "53560 Hull St, San Diego, CA 92152" },
 		programs: ["Next-Gen Cloud Platform Migration", "Navy Tactical Cloud"],
@@ -90,7 +90,7 @@ export const mockStakeholders: Stakeholder[] = [
 		},
 	},
 	{
-		id: "st3", name: "BG James Gruber", title: "Program Executive", org: "Army Futures Command", branch: "Army",
+		id: "st3", type: "person", name: "BG James Gruber", title: "Program Executive", org: "Army Futures Command", branch: "Army",
 		stage: "unknown", confidence: "medium",
 		contact: { email: "james.r.gruber.mil@army.mil", phone: "(512) 782-6100", address: "100 NE Loop 410, Austin, TX 78209" },
 		programs: ["Project Linchpin", "Army AI/ML Task Force"],
@@ -134,7 +134,7 @@ export const mockStakeholders: Stakeholder[] = [
 		},
 	},
 	{
-		id: "st4", name: "Dr. Michael Torres", title: "Program Manager", org: "NIWC PAC", branch: "Navy",
+		id: "st4", type: "person", name: "Dr. Michael Torres", title: "Program Manager", org: "NIWC PAC", branch: "Navy",
 		stage: "met", confidence: "high",
 		contact: { email: "michael.a.torres2@navy.mil", phone: "(619) 553-4478", address: "53560 Hull St, San Diego, CA 92152" },
 		programs: ["Next-Gen Cloud Platform Migration", "Kubernetes Adoption Program"],
@@ -156,7 +156,7 @@ export const mockStakeholders: Stakeholder[] = [
 		notes: "Met briefly at AFCEA West. He was interested in how we handle STIG automation. Follow up at WEST 2026.",
 	},
 	{
-		id: "st5", name: "Mr. Doug Beck", title: "Director", org: "DIU", branch: "DIU",
+		id: "st5", type: "person", name: "Mr. Doug Beck", title: "Director", org: "DIU", branch: "DIU",
 		stage: "aware", confidence: "high",
 		contact: { email: "douglas.beck@diu.mil", phone: "(650) 604-4500", address: "1070 Arastradero Rd, Palo Alto, CA 94304" },
 		programs: ["Autonomous Logistics Transition", "DIU AI Portfolio"],
@@ -174,7 +174,7 @@ export const mockStakeholders: Stakeholder[] = [
 		notes: "",
 	},
 	{
-		id: "st6", name: "LtCol. Jason Rivera", title: "Program Manager", org: "USMC DCI", branch: "Marines",
+		id: "st6", type: "person", name: "LtCol. Jason Rivera", title: "Program Manager", org: "USMC DCI", branch: "Marines",
 		stage: "unknown", confidence: "high",
 		contact: { email: "jason.rivera@usmc.mil", phone: "(703) 784-3925", address: "3000 Marine Corps Pentagon, Washington, DC 20350" },
 		programs: ["Platform Modernization (Peraton award)", "USMC Logistics Kubernetes Migration"],

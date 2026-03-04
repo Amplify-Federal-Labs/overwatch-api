@@ -1,0 +1,1 @@
+ALTER TABLE stakeholders ADD COLUMN type TEXT NOT NULL DEFAULT 'person';

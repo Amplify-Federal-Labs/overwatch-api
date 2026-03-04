@@ -6,6 +6,7 @@ import type { SignalAnalysisInput, SignalAnalysisResult, ExtractedEntity } from 
 export function buildSignalRow(
 	input: SignalAnalysisInput,
 	result: SignalAnalysisResult,
+	stakeholderIds: string[] = [],
 ) {
 	const now = new Date().toISOString();
 	return {
@@ -25,7 +26,7 @@ export function buildSignalRow(
 		starred: false,
 		tags: result.tags,
 		competencies: result.competencies,
-		stakeholderIds: [] as string[],
+		stakeholderIds,
 		competitors: [] as string[],
 		vendors: [] as string[],
 		createdAt: now,
@@ -51,8 +52,8 @@ export class SignalRepository {
 		this.db = drizzle(d1);
 	}
 
-	async insert(input: SignalAnalysisInput, result: SignalAnalysisResult): Promise<string> {
-		const row = buildSignalRow(input, result);
+	async insert(input: SignalAnalysisInput, result: SignalAnalysisResult, stakeholderIds: string[] = []): Promise<string> {
+		const row = buildSignalRow(input, result, stakeholderIds);
 		const entityRows = buildEntityRows(row.id, result.entities);
 
 		await this.db.insert(signals).values(row);

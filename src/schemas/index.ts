@@ -24,6 +24,7 @@ export {
 	type SignalAnalysisResult,
 } from "./signal";
 export {
+	StakeholderTypeEnum,
 	RelationshipStageEnum,
 	ContactInfoSchema,
 	SocialProfileSchema,
@@ -34,6 +35,7 @@ export {
 	CareerAssignmentSchema,
 	MilitaryBioSchema,
 	StakeholderSchema,
+	type StakeholderType,
 	type RelationshipStage,
 	type ContactInfo,
 	type SocialProfile,

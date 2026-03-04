@@ -78,8 +78,12 @@ export const MilitaryBioSchema = z.object({
 });
 export type MilitaryBio = z.infer<typeof MilitaryBioSchema>;
 
+export const StakeholderTypeEnum = z.enum(["person", "agency"]);
+export type StakeholderType = z.infer<typeof StakeholderTypeEnum>;
+
 export const StakeholderSchema = z.object({
 	id: z.string(),
+	type: StakeholderTypeEnum,
 	name: z.string(),
 	title: z.string(),
 	org: z.string(),

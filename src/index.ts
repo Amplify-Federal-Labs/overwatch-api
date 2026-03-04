@@ -10,7 +10,7 @@ import { stakeholdersRouter } from "./endpoints/stakeholders/router";
 import { competitorsRouter } from "./endpoints/competitors/router";
 import { interactionsRouter } from "./endpoints/interactions/router";
 import { draftsRouter } from "./endpoints/drafts/router";
-import { SignalIngestor } from "./agents/signal-ingestor";
+import { getScheduledJob } from "./cron/scheduler";
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -78,12 +78,13 @@ export { app };
 export default {
 	fetch: app.fetch,
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-		const ingestor = new SignalIngestor(env);
+		const hour = new Date(event.scheduledTime).getUTCHours();
+		const job = getScheduledJob(hour);
 		ctx.waitUntil(
-			ingestor.ingest().then((result) => {
-				console.log("Cron signal ingestion completed:", JSON.stringify(result));
+			job.run(env).then((result) => {
+				console.log(`Cron job "${job.name}" completed:`, JSON.stringify(result));
 			}).catch((err) => {
-				console.error("Cron signal ingestion failed:", err);
+				console.error(`Cron job "${job.name}" failed:`, err);
 			})
 		);
 	},

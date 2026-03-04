@@ -159,6 +159,31 @@ describe("SignalAnalyzer", () => {
 			expect(result.title).toBe("Navy Cloud Migration RFI");
 		});
 
+		it("recovers from truncated JSON by closing open strings and braces", async () => {
+			const agent = new SignalAnalyzer(mockEnv);
+			const truncated = '{"title":"Navy Cloud RFI","summary":"NIWC PAC seeks input","type":"opportunity","branch":"Navy","tags":["IL5"],"competencies":["B"],"play":"classifiedai","relevance":92,"entities":[{"type":"agency","value":"NIWC Pac';
+			mockCreate.mockResolvedValueOnce({
+				choices: [{ message: { content: truncated } }],
+			});
+
+			const result = await agent.analyze(SAMPLE_INPUT);
+			expect(result.title).toBe("Navy Cloud RFI");
+			expect(result.type).toBe("opportunity");
+			expect(result.relevance).toBe(92);
+		});
+
+		it("recovers from JSON truncated mid-array", async () => {
+			const agent = new SignalAnalyzer(mockEnv);
+			const truncated = '{"title":"Test","summary":"Summary","type":"opportunity","branch":"Navy","tags":["IL5","cloud';
+			mockCreate.mockResolvedValueOnce({
+				choices: [{ message: { content: truncated } }],
+			});
+
+			const result = await agent.analyze(SAMPLE_INPUT);
+			expect(result.title).toBe("Test");
+			expect(result.type).toBe("opportunity");
+		});
+
 		it("throws on completely invalid JSON", async () => {
 			const agent = new SignalAnalyzer(mockEnv);
 			mockCreate.mockResolvedValueOnce({

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseGovConWireRss, rssItemsToSignals } from "./govconwire-rss-parser";
+import { parseRssFeed, rssItemsToSignals } from "./rss-parser";
 
 const SAMPLE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -27,9 +27,9 @@ const SAMPLE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
   </channel>
 </rss>`;
 
-describe("parseGovConWireRss", () => {
+describe("parseRssFeed", () => {
 	it("should parse RSS items from valid XML", () => {
-		const items = parseGovConWireRss(SAMPLE_RSS);
+		const items = parseRssFeed(SAMPLE_RSS);
 
 		expect(items).toHaveLength(2);
 		expect(items[0].title).toBe("Lockheed Secures $1.9B Air Force Contract");
@@ -41,18 +41,18 @@ describe("parseGovConWireRss", () => {
 	});
 
 	it("should strip HTML from description", () => {
-		const items = parseGovConWireRss(SAMPLE_RSS);
+		const items = parseRssFeed(SAMPLE_RSS);
 
 		expect(items[0].description).toBe("Lockheed Martin has won a contract worth $1.9 billion.");
 		expect(items[0].description).not.toContain("<");
 	});
 
 	it("should return empty array for invalid XML", () => {
-		expect(parseGovConWireRss("not xml")).toEqual([]);
+		expect(parseRssFeed("not xml")).toEqual([]);
 	});
 
 	it("should return empty array for XML without channel", () => {
-		expect(parseGovConWireRss("<rss></rss>")).toEqual([]);
+		expect(parseRssFeed("<rss></rss>")).toEqual([]);
 	});
 
 	it("should handle single item (non-array)", () => {
@@ -67,7 +67,7 @@ describe("parseGovConWireRss", () => {
     </item>
   </channel>
 </rss>`;
-		const items = parseGovConWireRss(singleItemRss);
+		const items = parseRssFeed(singleItemRss);
 		expect(items).toHaveLength(1);
 		expect(items[0].title).toBe("Single Article");
 	});
@@ -84,15 +84,15 @@ describe("parseGovConWireRss", () => {
     </item>
   </channel>
 </rss>`;
-		const items = parseGovConWireRss(singleCatRss);
+		const items = parseRssFeed(singleCatRss);
 		expect(items[0].categories).toEqual(["DOD"]);
 	});
 });
 
 describe("rssItemsToSignals", () => {
-	it("should convert RSS items to SignalAnalysisInput array", () => {
-		const items = parseGovConWireRss(SAMPLE_RSS);
-		const signals = rssItemsToSignals(items);
+	it("should convert RSS items to SignalAnalysisInput with given sourceName", () => {
+		const items = parseRssFeed(SAMPLE_RSS);
+		const signals = rssItemsToSignals(items, "GovConWire");
 
 		expect(signals).toHaveLength(2);
 		expect(signals[0]).toEqual({
@@ -104,15 +104,23 @@ describe("rssItemsToSignals", () => {
 		});
 	});
 
+	it("should use the provided sourceName for each signal", () => {
+		const items = parseRssFeed(SAMPLE_RSS);
+		const signals = rssItemsToSignals(items, "DefenseOne");
+
+		expect(signals[0].sourceName).toBe("DefenseOne");
+		expect(signals[1].sourceName).toBe("DefenseOne");
+	});
+
 	it("should include categories and date in content", () => {
-		const items = parseGovConWireRss(SAMPLE_RSS);
-		const signals = rssItemsToSignals(items);
+		const items = parseRssFeed(SAMPLE_RSS);
+		const signals = rssItemsToSignals(items, "GovConWire");
 
 		expect(signals[0].content).toContain("Contract Awards");
 		expect(signals[0].content).toContain("Wed, 04 Mar 2026");
 	});
 
 	it("should return empty array for empty input", () => {
-		expect(rssItemsToSignals([])).toEqual([]);
+		expect(rssItemsToSignals([], "Any")).toEqual([]);
 	});
 });
