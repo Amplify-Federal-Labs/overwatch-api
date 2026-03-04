@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import type { SourceMetadata } from "../schemas";
 
 export const signals = sqliteTable("signals", {
 	id: text("id").primaryKey().notNull(),
@@ -19,6 +20,7 @@ export const signals = sqliteTable("signals", {
 	stakeholderIds: text("stakeholder_ids", { mode: "json" }).notNull().$type<string[]>().default([]),
 	competitors: text("competitors", { mode: "json" }).notNull().$type<string[]>().default([]),
 	vendors: text("vendors", { mode: "json" }).notNull().$type<string[]>().default([]),
+	sourceMetadata: text("source_metadata", { mode: "json" }).$type<SourceMetadata>(),
 	createdAt: text("created_at").notNull(),
 });
 

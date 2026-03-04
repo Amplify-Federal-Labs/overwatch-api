@@ -40,6 +40,33 @@ export const ExtractedEntitySchema = z.object({
 });
 export type ExtractedEntity = z.infer<typeof ExtractedEntitySchema>;
 
+export const FpdsContractMetadataSchema = z.object({
+	sourceType: z.literal("fpds"),
+	piid: z.string(),
+	modNumber: z.string(),
+	referencedPiid: z.string().optional(),
+	agencyId: z.string(),
+	agencyName: z.string(),
+	vendorName: z.string(),
+	description: z.string().optional(),
+	obligatedAmount: z.string(),
+	totalObligatedAmount: z.string(),
+	naicsCode: z.string().optional(),
+	naicsDescription: z.string().optional(),
+	pscCode: z.string().optional(),
+	pscDescription: z.string().optional(),
+	signedDate: z.string().optional(),
+	performanceState: z.string().optional(),
+	contractType: z.string().optional(),
+	competitionType: z.string().optional(),
+});
+export type FpdsContractMetadata = z.infer<typeof FpdsContractMetadataSchema>;
+
+export const SourceMetadataSchema = z.discriminatedUnion("sourceType", [
+	FpdsContractMetadataSchema,
+]);
+export type SourceMetadata = z.infer<typeof SourceMetadataSchema>;
+
 export const SignalSchema = z.object({
 	id: z.string(),
 	date: z.string(),
@@ -57,6 +84,7 @@ export const SignalSchema = z.object({
 	competitors: z.array(z.string()).optional(),
 	vendors: z.array(z.string()).optional(),
 	sourceUrl: z.string().optional(),
+	sourceMetadata: SourceMetadataSchema.optional(),
 });
 export type Signal = z.infer<typeof SignalSchema>;
 
@@ -66,6 +94,7 @@ export const SignalAnalysisInputSchema = z.object({
 	sourceName: z.string(),
 	sourceUrl: z.string().optional(),
 	sourceLink: z.string().optional(),
+	sourceMetadata: SourceMetadataSchema.optional(),
 });
 export type SignalAnalysisInput = z.infer<typeof SignalAnalysisInputSchema>;
 

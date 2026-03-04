@@ -314,4 +314,64 @@ describe("entriesToSignals", () => {
 		expect(signals[0].sourceLink).toBe("fpds://NONE_9700_0001_0");
 		expect(signals[0].content).toContain("VENDOR A");
 	});
+
+	it("should attach sourceMetadata with FPDS contract fields", () => {
+		const entry: FpdsContractEntry = {
+			piid: "W911QX-24-F-0042",
+			modNumber: "0",
+			referencedPiid: "W911QX-20-D-0005",
+			agencyId: "9700",
+			agencyName: "DEPT OF THE ARMY",
+			vendorName: "PARSONS GOVERNMENT SERVICES",
+			description: "Engineering services at Superfund site",
+			obligatedAmount: "1230000",
+			totalObligatedAmount: "1230000",
+			naicsCode: "541330",
+			naicsDescription: "ENGINEERING SERVICES",
+			pscCode: "C219",
+			pscDescription: "ENVIRONMENTAL SYSTEMS PROTECTION",
+			signedDate: "2026-02-28",
+			performanceState: "NEW JERSEY",
+			contractType: "DELIVERY ORDER",
+			competitionType: "FULL AND OPEN COMPETITION",
+		};
+
+		const [signal] = entriesToSignals([entry]);
+
+		expect(signal.sourceMetadata).toEqual({
+			sourceType: "fpds",
+			piid: "W911QX-24-F-0042",
+			modNumber: "0",
+			referencedPiid: "W911QX-20-D-0005",
+			agencyId: "9700",
+			agencyName: "DEPT OF THE ARMY",
+			vendorName: "PARSONS GOVERNMENT SERVICES",
+			description: "Engineering services at Superfund site",
+			obligatedAmount: "1230000",
+			totalObligatedAmount: "1230000",
+			naicsCode: "541330",
+			naicsDescription: "ENGINEERING SERVICES",
+			pscCode: "C219",
+			pscDescription: "ENVIRONMENTAL SYSTEMS PROTECTION",
+			signedDate: "2026-02-28",
+			performanceState: "NEW JERSEY",
+			contractType: "DELIVERY ORDER",
+			competitionType: "FULL AND OPEN COMPETITION",
+		});
+	});
+
+	it("should set sourceMetadata.sourceType to fpds", () => {
+		const entry: FpdsContractEntry = {
+			piid: "0001",
+			modNumber: "0",
+			agencyId: "9700",
+			agencyName: "ARMY",
+			vendorName: "VENDOR A",
+			obligatedAmount: "1000",
+			totalObligatedAmount: "1000",
+		};
+
+		const [signal] = entriesToSignals([entry]);
+		expect(signal.sourceMetadata?.sourceType).toBe("fpds");
+	});
 });

@@ -176,6 +176,32 @@ describe("SignalIngestor.ingest", () => {
 		expect(mockInsert).toHaveBeenCalledTimes(1);
 	});
 
+	it("should pass sourceMetadata through to repository.insert", async () => {
+		const metadata = {
+			sourceType: "fpds" as const,
+			piid: "0001",
+			modNumber: "0",
+			agencyId: "9700",
+			agencyName: "DEPT OF THE ARMY",
+			vendorName: "VENDOR A",
+			obligatedAmount: "1000",
+			totalObligatedAmount: "1000",
+		};
+		mockAnalyze.mockResolvedValue(MOCK_ANALYSIS_RESULT);
+		mockInsert.mockResolvedValue("fake-id");
+		mockFetchFpdsContracts.mockResolvedValue([makeFpdsEntry()]);
+		mockEntriesToSignals.mockReturnValue([{
+			...makeSignalInput("fpds://1"),
+			sourceMetadata: metadata,
+		}]);
+
+		const ingestor = new SignalIngestor(makeEnv());
+		await ingestor.ingest();
+
+		expect(mockInsert).toHaveBeenCalledTimes(1);
+		expect(mockInsert.mock.calls[0][0].sourceMetadata).toEqual(metadata);
+	});
+
 	it("should not persist when analysis fails", async () => {
 		mockAnalyze.mockRejectedValue(new Error("AI failed"));
 		mockFetchFpdsContracts.mockResolvedValue([makeFpdsEntry()]);

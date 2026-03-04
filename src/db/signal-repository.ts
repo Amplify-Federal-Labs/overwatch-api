@@ -16,6 +16,7 @@ export function buildSignalRow(
 		sourceType: input.sourceType,
 		sourceUrl: input.sourceUrl ?? null,
 		sourceLink: input.sourceLink ?? null,
+		sourceMetadata: input.sourceMetadata ?? null,
 		title: result.title,
 		summary: result.summary,
 		type: result.type,

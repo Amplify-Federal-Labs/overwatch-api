@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import type { SignalAnalysisInput } from "../schemas";
+import type { SignalAnalysisInput, FpdsContractMetadata } from "../schemas";
 
 export interface FpdsContractEntry {
 	piid: string;
@@ -231,11 +231,35 @@ export function formatFpdsContent(entry: FpdsContractEntry): string {
 	return lines.join("\n");
 }
 
+function buildSourceMetadata(entry: FpdsContractEntry): FpdsContractMetadata {
+	return {
+		sourceType: "fpds",
+		piid: entry.piid,
+		modNumber: entry.modNumber,
+		referencedPiid: entry.referencedPiid,
+		agencyId: entry.agencyId,
+		agencyName: entry.agencyName,
+		vendorName: entry.vendorName,
+		description: entry.description,
+		obligatedAmount: entry.obligatedAmount,
+		totalObligatedAmount: entry.totalObligatedAmount,
+		naicsCode: entry.naicsCode,
+		naicsDescription: entry.naicsDescription,
+		pscCode: entry.pscCode,
+		pscDescription: entry.pscDescription,
+		signedDate: entry.signedDate,
+		performanceState: entry.performanceState,
+		contractType: entry.contractType,
+		competitionType: entry.competitionType,
+	};
+}
+
 export function entriesToSignals(entries: FpdsContractEntry[]): SignalAnalysisInput[] {
 	return entries.map((entry) => ({
 		content: formatFpdsContent(entry),
 		sourceType: "fpds" as const,
 		sourceName: "FPDS",
 		sourceLink: buildFpdsSourceUrl(entry),
+		sourceMetadata: buildSourceMetadata(entry),
 	}));
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildSignalRow, buildEntityRows } from "./signal-repository";
-import type { SignalAnalysisInput, SignalAnalysisResult } from "../schemas";
+import type { SignalAnalysisInput, SignalAnalysisResult, FpdsContractMetadata } from "../schemas";
 
 const ANALYSIS_INPUT: SignalAnalysisInput = {
 	content: "Lockheed Martin was awarded a $50M contract...",
@@ -76,6 +76,30 @@ describe("buildSignalRow", () => {
 		const row1 = buildSignalRow(ANALYSIS_INPUT, ANALYSIS_RESULT);
 		const row2 = buildSignalRow(ANALYSIS_INPUT, ANALYSIS_RESULT);
 		expect(row1.id).not.toBe(row2.id);
+	});
+
+	it("should include sourceMetadata when present", () => {
+		const metadata: FpdsContractMetadata = {
+			sourceType: "fpds",
+			piid: "W911QX-24-F-0042",
+			modNumber: "0",
+			agencyId: "9700",
+			agencyName: "DEPT OF THE ARMY",
+			vendorName: "PARSONS GOVERNMENT SERVICES",
+			obligatedAmount: "1230000",
+			totalObligatedAmount: "1230000",
+		};
+		const input: SignalAnalysisInput = {
+			...ANALYSIS_INPUT,
+			sourceMetadata: metadata,
+		};
+		const row = buildSignalRow(input, ANALYSIS_RESULT);
+		expect(row.sourceMetadata).toEqual(metadata);
+	});
+
+	it("should set sourceMetadata to null when absent", () => {
+		const row = buildSignalRow(ANALYSIS_INPUT, ANALYSIS_RESULT);
+		expect(row.sourceMetadata).toBeNull();
 	});
 });
 
