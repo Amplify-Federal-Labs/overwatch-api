@@ -1,11 +1,29 @@
 import { ApiException, fromHono } from "chanfana";
 import { Hono } from "hono";
-import { tasksRouter } from "./endpoints/tasks/router";
+import { cors } from "hono/cors";
 import { ContentfulStatusCode } from "hono/utils/http-status";
+import { tasksRouter } from "./endpoints/tasks/router";
 import { DummyEndpoint } from "./endpoints/dummyEndpoint";
+import { kpisRouter } from "./endpoints/kpis/router";
+import { signalsRouter } from "./endpoints/signals/router";
+import { stakeholdersRouter } from "./endpoints/stakeholders/router";
+import { competitorsRouter } from "./endpoints/competitors/router";
+import { interactionsRouter } from "./endpoints/interactions/router";
+import { draftsRouter } from "./endpoints/drafts/router";
+import { SignalIngestor } from "./agents/signal-ingestor";
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
+
+// CORS — allow frontend origins
+app.use("/*", cors({
+	origin: [
+		"http://localhost:5173",
+		"https://*overwatch-d0f.pages.dev"
+	],
+	allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+	allowHeaders: ["Content-Type"],
+}));
 
 app.onError((err, c) => {
 	if (err instanceof ApiException) {
@@ -33,18 +51,39 @@ const openapi = fromHono(app, {
 	docs_url: "/",
 	schema: {
 		info: {
-			title: "My Awesome API",
-			version: "2.0.0",
-			description: "This is the documentation for my awesome API.",
+			title: "Overwatch API",
+			version: "1.0.0",
+			description: "Intelligence and relationship management API for Amplify Federal.",
 		},
 	},
 });
 
-// Register Tasks Sub router
+// Register routers
 openapi.route("/tasks", tasksRouter);
+openapi.route("/kpis", kpisRouter);
+openapi.route("/signals", signalsRouter);
+openapi.route("/stakeholders", stakeholdersRouter);
+openapi.route("/competitors", competitorsRouter);
+openapi.route("/interactions", interactionsRouter);
+openapi.route("/drafts", draftsRouter);
 
 // Register other endpoints
 openapi.post("/dummy/:slug", DummyEndpoint);
 
-// Export the Hono app
-export default app;
+// Named export for testing (Hono's app.request() method)
+export { app };
+
+// Export the Worker with fetch and scheduled handlers
+export default {
+	fetch: app.fetch,
+	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+		const ingestor = new SignalIngestor(env);
+		ctx.waitUntil(
+			ingestor.ingest().then((result) => {
+				console.log("Cron signal ingestion completed:", JSON.stringify(result));
+			}).catch((err) => {
+				console.error("Cron signal ingestion failed:", err);
+			})
+		);
+	},
+};

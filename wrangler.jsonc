@@ -1,16 +1,20 @@
 {
 	"compatibility_date": "2025-10-08",
+	"compatibility_flags": ["nodejs_compat"],
 	"main": "src/index.ts",
 	"name": "overwatch-api",
 	"upload_source_maps": true,
 	"observability": {
 		"enabled": true
 	},
+	"triggers": {
+		"crons": ["0 * * * *"]
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",
 			"database_name": "overwatch",
-			"database_id": "d4ddc1fc-b3b8-4069-9a65-60f1c660f612"
+			"database_id": "8f422500-2a40-4ce9-b4d4-4a2965144a94"
 		}
 	]
 }

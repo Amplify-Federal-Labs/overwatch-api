@@ -17,24 +17,34 @@
 	},
 	"dependencies": {
 		"chanfana": "2.8.3",
+		"drizzle-orm": "^0.45.1",
+		"fast-xml-parser": "^5.4.2",
 		"hono": "4.11.1",
+		"openai": "^6.25.0",
 		"zod": "3.25.67"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "0.10.11",
 		"@types/node": "24.10.1",
+		"drizzle-kit": "^0.31.9",
 		"typescript": "5.9.3",
 		"vitest": "3.2.4",
 		"wrangler": "4.56.0"
+	},
+	"exports": {
+		"./schemas": "./src/schemas/index.ts"
 	},
 	"private": true,
 	"scripts": {
 		"cf-typegen": "wrangler types",
 		"deploy": "wrangler deploy",
-		"dev": "pnpm seedLocalDb && wrangler dev",
+		"dev": "npm run seedLocalDb && wrangler dev",
 		"predeploy": "wrangler d1 migrations apply DB --remote",
 		"schema": "npx chanfana",
 		"seedLocalDb": "wrangler d1 migrations apply DB --local",
-		"test": "wrangler deploy --dry-run && npx vitest run --config tests/vitest.config.mts"
+		"build": "wrangler deploy --dry-run",
+		"test": "npm run build && npx vitest run --config tests/vitest.config.mts",
+		"test:unit": "npx vitest run --config tests/vitest.unit.config.mts",
+		"test:all": "npm run test:unit && npm test"
 	}
 }

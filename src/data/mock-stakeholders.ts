@@ -1,0 +1,215 @@
+import type { Stakeholder } from "../schemas";
+
+export const mockStakeholders: Stakeholder[] = [
+	{
+		id: "st1", name: "Col. David Park", title: "Program Director", org: "645th AESG", branch: "Air Force",
+		stage: "aware", confidence: "high",
+		contact: { email: "david.park.3@us.af.mil", phone: "(210) 395-4821", address: "Bldg 1610, Lackland AFB, San Antonio, TX 78236" },
+		programs: ["DevSecOps Pipeline Modernization", "Platform One Migration"],
+		awards: [
+			{ title: "CI/CD Modernization Phase 1", prime: "SAIC", value: "$18M", year: 2024 },
+			{ title: "Software Factory Support", prime: "ECS", value: "$12M", year: 2023 },
+		],
+		social: {
+			linkedin: { active: true, recentTopics: ["DevSecOps maturity models", "Shift-left security testing", "Software factory KPIs"], lastPost: "2026-02-20", followers: 2400 },
+			twitter: { active: false, recentTopics: [] },
+		},
+		events: [
+			{ name: "AFCEA TechNet Air 2026", date: "2026-04-08", location: "San Antonio, TX", role: "Panel Speaker", topic: "Scaling DevSecOps Across Air Force Software Factories", confirmed: true },
+			{ name: "Platform One Summit", date: "2026-05-15", location: "Virtual", role: "Keynote", topic: "FY26 Platform One Roadmap", confirmed: true },
+		],
+		pastEvents: [
+			{ name: "AFCEA West 2026", date: "2026-01-22", topic: "CI/CD Pipeline Challenges" },
+		],
+		proximity: { mutualContacts: ["Dell Federal team (existing partnership)"], sharedEvents: 0, amplifyHistory: "None — no prior interaction", warmIntro: "Possible via Dell Federal account manager" },
+		signals: ["s2"],
+		notes: "",
+		militaryBio: {
+			rank: "Colonel",
+			rankAbbrev: "Col.",
+			branch: "U.S. Air Force",
+			commissionYear: 2001,
+			education: [
+				"B.S. Computer Science, U.S. Air Force Academy",
+				"M.S. Software Engineering, Air Force Institute of Technology",
+				"National Defense University, Joint Forces Staff College",
+			],
+			careerHistory: [
+				{ role: "Program Director, 645th AESG", org: "645th Aeronautical Engineering Group", years: "2024–present" },
+				{ role: "Deputy Director, Platform One", org: "USAF Chief Software Officer", years: "2021–2024" },
+				{ role: "Squadron Commander, 90th Cyberspace Ops Sq", org: "24th Air Force", years: "2018–2021" },
+				{ role: "Flight Commander, Software Engineering", org: "Hanscom AFB", years: "2014–2018" },
+			],
+			focusAreas: ["DevSecOps", "Platform Engineering", "Software Factory Operations", "CI/CD Pipeline Modernization"],
+			decorations: ["Meritorious Service Medal (2 OLC)", "Air Force Commendation Medal"],
+			bioSourceUrl: "https://www.af.mil/About-Us/Biographies/Display/Article/example-park/",
+			bioRetrievedDate: "2026-02-15",
+		},
+	},
+	{
+		id: "st2", name: "CAPT Jennifer Walsh", title: "Contracting Officer", org: "NIWC PAC", branch: "Navy",
+		stage: "unknown", confidence: "high",
+		contact: { email: "jennifer.m.walsh@navy.mil", phone: "(619) 553-3120", address: "53560 Hull St, San Diego, CA 92152" },
+		programs: ["Next-Gen Cloud Platform Migration", "Navy Tactical Cloud"],
+		awards: [
+			{ title: "IL5 Cloud Migration Phase 2", prime: "Leidos", value: "$32M", year: 2025 },
+			{ title: "Zero Trust Architecture Pilot", prime: "Booz Allen", value: "$8M", year: 2024 },
+		],
+		social: {
+			linkedin: { active: true, recentTopics: ["Zero trust implementation", "Cloud authorization challenges", "FedRAMP High"], lastPost: "2026-02-28", followers: 1100 },
+			twitter: { active: true, recentTopics: ["Navy digital transformation", "cATO acceleration"], lastPost: "2026-03-01" },
+		},
+		events: [
+			{ name: "WEST 2026 Conference", date: "2026-03-18", location: "San Diego, CA", role: "Attendee", topic: null, confirmed: true },
+			{ name: "NIWC PAC Industry Day", date: "2026-04-02", location: "San Diego, CA", role: "Host/Presenter", topic: "Cloud Platform Migration Requirements Brief", confirmed: true },
+		],
+		pastEvents: [],
+		proximity: { mutualContacts: [], sharedEvents: 0, amplifyHistory: "None", warmIntro: "No clear path — industry day is best first encounter" },
+		signals: ["s1"],
+		notes: "",
+		militaryBio: {
+			rank: "Captain (Navy)",
+			rankAbbrev: "CAPT",
+			branch: "U.S. Navy",
+			commissionYear: 2003,
+			education: [
+				"B.S. Information Technology, U.S. Naval Academy",
+				"M.S. Computer Science, Naval Postgraduate School",
+				"Defense Acquisition University, Level III Contracting",
+			],
+			careerHistory: [
+				{ role: "Contracting Officer, Cloud Programs", org: "NIWC Pacific", years: "2024–present" },
+				{ role: "Deputy for Acquisition, Cyber Programs", org: "NAVWAR", years: "2021–2024" },
+				{ role: "IT Procurement Lead", org: "NAVSUP Fleet Logistics Center", years: "2018–2021" },
+				{ role: "Department Head, Combat Systems", org: "USS Lake Champlain (CG-57)", years: "2015–2018" },
+			],
+			focusAreas: ["Cloud Migration", "Zero Trust Architecture", "FedRAMP High Authorization", "IL5 Hosting"],
+			decorations: ["Navy and Marine Corps Commendation Medal (3 awards)", "Joint Service Achievement Medal"],
+			bioSourceUrl: "https://www.niwcpacific.navy.mil/Leadership/Biographies/Display/Article/example-walsh/",
+			bioRetrievedDate: "2026-02-20",
+		},
+	},
+	{
+		id: "st3", name: "BG James Gruber", title: "Program Executive", org: "Army Futures Command", branch: "Army",
+		stage: "unknown", confidence: "medium",
+		contact: { email: "james.r.gruber.mil@army.mil", phone: "(512) 782-6100", address: "100 NE Loop 410, Austin, TX 78209" },
+		programs: ["Project Linchpin", "Army AI/ML Task Force"],
+		awards: [
+			{ title: "AI Platform Prototype", prime: "Palantir", value: "$22M", year: 2025 },
+		],
+		social: {
+			linkedin: { active: true, recentTopics: ["Responsible AI in defense", "Software factory culture change", "Army modernization priorities"], lastPost: "2026-02-15", followers: 3800 },
+			twitter: { active: true, recentTopics: ["Project Linchpin updates", "AI readiness"], lastPost: "2026-02-25" },
+		},
+		events: [
+			{ name: "AUSA Global Force Symposium", date: "2026-03-25", location: "Huntsville, AL", role: "Panel Speaker", topic: "AI at Scale: From Prototype to Production", confirmed: true },
+			{ name: "Army Futures Command Tech Exchange", date: "2026-05-01", location: "Austin, TX", role: "Host", topic: "Software Factory Partnerships", confirmed: false },
+		],
+		pastEvents: [
+			{ name: "AUSA Annual Meeting 2025", date: "2025-10-14", topic: "Modernization Priorities for FY26" },
+		],
+		proximity: { mutualContacts: [], sharedEvents: 0, amplifyHistory: "None", warmIntro: "No direct path — AUSA panel is best approach" },
+		signals: ["s8"],
+		notes: "",
+		militaryBio: {
+			rank: "Brigadier General",
+			rankAbbrev: "BG",
+			branch: "U.S. Army",
+			commissionYear: 1999,
+			education: [
+				"B.S. Electrical Engineering, U.S. Military Academy at West Point",
+				"M.S. Computer Science, Georgia Institute of Technology",
+				"U.S. Army War College",
+			],
+			careerHistory: [
+				{ role: "Program Executive, Army AI/ML", org: "Army Futures Command", years: "2024–present" },
+				{ role: "Director, Project Linchpin", org: "Army AI Task Force", years: "2022–2024" },
+				{ role: "Commander, 781st Military Intelligence Bn", org: "Fort Meade, MD", years: "2019–2022" },
+				{ role: "Deputy Director, Cyber Operations", org: "Army Cyber Command", years: "2016–2019" },
+			],
+			focusAreas: ["Artificial Intelligence", "Machine Learning Operations", "Software Factory Culture", "Army Modernization"],
+			decorations: ["Legion of Merit", "Bronze Star Medal", "Defense Meritorious Service Medal"],
+			bioSourceUrl: "https://www.army.mil/leaders/bio/example-gruber/",
+			bioRetrievedDate: "2026-02-10",
+		},
+	},
+	{
+		id: "st4", name: "Dr. Michael Torres", title: "Program Manager", org: "NIWC PAC", branch: "Navy",
+		stage: "met", confidence: "high",
+		contact: { email: "michael.a.torres2@navy.mil", phone: "(619) 553-4478", address: "53560 Hull St, San Diego, CA 92152" },
+		programs: ["Next-Gen Cloud Platform Migration", "Kubernetes Adoption Program"],
+		awards: [
+			{ title: "Container Orchestration Pilot", prime: "ECS", value: "$6M", year: 2024 },
+		],
+		social: {
+			linkedin: { active: true, recentTopics: ["Kubernetes in classified environments", "STIG automation", "Platform engineering culture"], lastPost: "2026-03-01", followers: 890 },
+			twitter: { active: false, recentTopics: [] },
+		},
+		events: [
+			{ name: "KubeCon NA 2026 (Gov Track)", date: "2026-04-22", location: "Los Angeles, CA", role: "Speaker", topic: "Kubernetes at IL5: Lessons from Navy", confirmed: true },
+		],
+		pastEvents: [
+			{ name: "AFCEA West 2026", date: "2026-01-22", topic: "Cloud Platform Challenges in Navy" },
+		],
+		proximity: { mutualContacts: [], sharedEvents: 1, amplifyHistory: "Brief intro at AFCEA West — exchanged cards", warmIntro: "Direct follow-up — already met" },
+		signals: ["s1"],
+		notes: "Met briefly at AFCEA West. He was interested in how we handle STIG automation. Follow up at WEST 2026.",
+	},
+	{
+		id: "st5", name: "Mr. Doug Beck", title: "Director", org: "DIU", branch: "DIU",
+		stage: "aware", confidence: "high",
+		contact: { email: "douglas.beck@diu.mil", phone: "(650) 604-4500", address: "1070 Arastradero Rd, Palo Alto, CA 94304" },
+		programs: ["Autonomous Logistics Transition", "DIU AI Portfolio"],
+		awards: [],
+		social: {
+			linkedin: { active: true, recentTopics: ["Commercial tech adoption in DoD", "Prototype-to-production gap", "Dual-use technology"], lastPost: "2026-02-18", followers: 12000 },
+			twitter: { active: true, recentTopics: ["DIU mission", "Innovation adoption speed"], lastPost: "2026-02-22" },
+		},
+		events: [
+			{ name: "NDIA Emerging Technologies Conference", date: "2026-04-10", location: "Washington, DC", role: "Keynote", topic: "Bridging the Valley of Death", confirmed: true },
+		],
+		pastEvents: [],
+		proximity: { mutualContacts: ["Second Front Systems (known entity)"], sharedEvents: 0, amplifyHistory: "None", warmIntro: "Possible via Second Front connection" },
+		signals: ["s7"],
+		notes: "",
+	},
+	{
+		id: "st6", name: "LtCol. Jason Rivera", title: "Program Manager", org: "USMC DCI", branch: "Marines",
+		stage: "unknown", confidence: "high",
+		contact: { email: "jason.rivera@usmc.mil", phone: "(703) 784-3925", address: "3000 Marine Corps Pentagon, Washington, DC 20350" },
+		programs: ["Platform Modernization (Peraton award)", "USMC Logistics Kubernetes Migration"],
+		awards: [
+			{ title: "Platform Modernization", prime: "Peraton", value: "$45M", year: 2026 },
+		],
+		social: {
+			linkedin: { active: false, recentTopics: [] },
+			twitter: { active: false, recentTopics: [] },
+		},
+		events: [
+			{ name: "Modern Day Marine 2026", date: "2026-05-06", location: "Washington, DC", role: "Attendee", topic: null, confirmed: false },
+		],
+		pastEvents: [],
+		proximity: { mutualContacts: [], sharedEvents: 0, amplifyHistory: "None", warmIntro: "No clear path — consider Peraton subcontracting intro" },
+		signals: ["s4"],
+		notes: "",
+		militaryBio: {
+			rank: "Lieutenant Colonel",
+			rankAbbrev: "LtCol.",
+			branch: "U.S. Marine Corps",
+			commissionYear: 2008,
+			education: [
+				"B.S. Computer Engineering, Virginia Military Institute",
+				"M.S. Systems Engineering, George Washington University",
+			],
+			careerHistory: [
+				{ role: "Program Manager, Platform Modernization", org: "USMC DCI", years: "2024–present" },
+				{ role: "Operations Officer, MCSC IT Systems", org: "Marine Corps Systems Command", years: "2021–2024" },
+				{ role: "Company Commander, Communications Bn", org: "Camp Pendleton, CA", years: "2018–2021" },
+			],
+			focusAreas: ["Platform Modernization", "Kubernetes Migration", "Logistics IT", "Container Orchestration"],
+			decorations: ["Navy and Marine Corps Commendation Medal", "Combat Action Ribbon"],
+			bioSourceUrl: "https://www.marines.mil/Leaders/Biographies/Display/Article/example-rivera/",
+			bioRetrievedDate: "2026-01-28",
+		},
+	},
+];
