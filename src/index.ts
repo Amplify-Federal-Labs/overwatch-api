@@ -19,7 +19,8 @@ const app = new Hono<{ Bindings: Env }>();
 app.use("/*", cors({
 	origin: [
 		"http://localhost:5173",
-		"https://*overwatch-d0f.pages.dev"
+		"https://overwatch-d0f.pages.dev",
+		"https://*.overwatch-d0f.pages.dev",
 	],
 	allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 	allowHeaders: ["Content-Type"],

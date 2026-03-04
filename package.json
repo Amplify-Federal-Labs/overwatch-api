@@ -45,6 +45,7 @@
 		"build": "wrangler deploy --dry-run",
 		"test": "npm run build && npx vitest run --config tests/vitest.config.mts",
 		"test:unit": "npx vitest run --config tests/vitest.unit.config.mts",
+		"lint": "tsc --noEmit",
 		"test:all": "npm run test:unit && npm test"
 	}
 }
