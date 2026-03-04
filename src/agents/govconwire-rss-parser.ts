@@ -8,6 +8,7 @@ export interface GovConWireRssItem {
 	description: string;
 	categories: string[];
 	creator: string;
+	guid: string;
 }
 
 const rssParser = new XMLParser({
@@ -17,6 +18,15 @@ const rssParser = new XMLParser({
 	parseTagValue: false,
 	isArray: (name) => name === "item" || name === "category",
 });
+
+function extractGuid(node: unknown): string {
+	if (typeof node === "string") return node;
+	if (node && typeof node === "object" && "#text" in (node as Record<string, unknown>)) {
+		const text = (node as Record<string, unknown>)["#text"];
+		return typeof text === "string" ? text : "";
+	}
+	return "";
+}
 
 function stripHtml(html: string): string {
 	return html
@@ -58,6 +68,7 @@ export function parseGovConWireRss(xml: string): GovConWireRssItem[] {
 			description: stripHtml(rawDescription),
 			categories,
 			creator: typeof item.creator === "string" ? item.creator : "",
+			guid: extractGuid(item.guid),
 		};
 	});
 }
@@ -74,6 +85,7 @@ export function rssItemsToSignals(items: GovConWireRssItem[]): SignalAnalysisInp
 			sourceType: "rss" as const,
 			sourceName: "GovConWire",
 			sourceLink: item.link,
+			sourceUrl: item.guid || undefined,
 		};
 	});
 }

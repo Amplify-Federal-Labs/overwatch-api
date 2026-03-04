@@ -12,6 +12,7 @@ const SAMPLE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
       <pubDate>Wed, 04 Mar 2026 05:59:25 +0000</pubDate>
       <category>Contract Awards</category>
       <category>DOD</category>
+      <guid isPermaLink="false">https://www.govconwire.com/articles/lockheed-air-force-contract</guid>
       <description><![CDATA[<p><img src="https://example.com/img.jpg" /></p><p>Lockheed Martin has won a contract worth $1.9 billion.</p>]]></description>
     </item>
     <item>
@@ -20,6 +21,7 @@ const SAMPLE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
       <dc:creator>John Smith</dc:creator>
       <pubDate>Tue, 03 Mar 2026 12:00:00 +0000</pubDate>
       <category>Cloud</category>
+      <guid isPermaLink="false">https://www.govconwire.com/articles/disa-cloud-contract</guid>
       <description><![CDATA[<p>DISA has awarded a cloud migration contract.</p>]]></description>
     </item>
   </channel>
@@ -35,6 +37,7 @@ describe("parseGovConWireRss", () => {
 		expect(items[0].creator).toBe("Jane Edwards");
 		expect(items[0].pubDate).toBe("Wed, 04 Mar 2026 05:59:25 +0000");
 		expect(items[0].categories).toEqual(["Contract Awards", "DOD"]);
+		expect(items[0].guid).toBe("https://www.govconwire.com/articles/lockheed-air-force-contract");
 	});
 
 	it("should strip HTML from description", () => {
@@ -97,6 +100,7 @@ describe("rssItemsToSignals", () => {
 			sourceType: "rss",
 			sourceName: "GovConWire",
 			sourceLink: "https://www.govconwire.com/articles/lockheed-air-force-contract",
+			sourceUrl: "https://www.govconwire.com/articles/lockheed-air-force-contract",
 		});
 	});
 
