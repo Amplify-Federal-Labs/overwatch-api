@@ -11,9 +11,13 @@ import { draftsRouter } from "./endpoints/drafts/router";
 import { cronRouter } from "./endpoints/cron/router";
 import { getScheduledJob } from "./cron/scheduler";
 import { Logger } from "./logger";
+import { etag } from "./middleware/etag";
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
+
+// ETag — return 304 Not Modified when response body hasn't changed
+app.use("/*", etag());
 
 // CORS — allow frontend origins
 app.use("/*", cors({
