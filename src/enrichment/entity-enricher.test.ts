@@ -153,15 +153,15 @@ describe("EntityEnricher", () => {
 		expect(mockUpdateStatus).toHaveBeenCalledWith(1, "enriched");
 	});
 
-	it("skips pages that return null and still extracts dossier", async () => {
+	it("uses full page text when available and snippet fallback when not", async () => {
 		mockFindPending.mockResolvedValue([PENDING_PERSON]);
 		mockBraveSearch.mockResolvedValue([
-			{ title: "Bio", url: "https://af.mil/bio/kim", description: "Bio" },
-			{ title: "PDF", url: "https://example.com/file.pdf", description: "PDF" },
+			{ title: "Bio", url: "https://af.mil/bio/kim", description: "Bio snippet" },
+			{ title: "PDF", url: "https://example.com/file.pdf", description: "PDF snippet" },
 		]);
 		mockFetchPageText
 			.mockResolvedValueOnce("Col. Kim bio text...")
-			.mockResolvedValueOnce(null); // PDF skipped
+			.mockResolvedValueOnce(null); // page fetch failed, falls back to snippet
 		mockExtract.mockResolvedValue(DOSSIER_RESULT);
 		mockInsertEnriched.mockResolvedValue("id");
 		mockUpdateStatus.mockResolvedValue(undefined);
@@ -169,9 +169,10 @@ describe("EntityEnricher", () => {
 		const enricher = new EntityEnricher(mockEnv);
 		await enricher.enrichPending();
 
-		// Should only pass one page content to extractor
 		const extractCall = mockExtract.mock.calls[0][0];
-		expect(extractCall.pageContents).toHaveLength(1);
+		expect(extractCall.pageContents).toHaveLength(2);
+		expect(extractCall.pageContents[0].text).toBe("Col. Kim bio text...");
+		expect(extractCall.pageContents[1].text).toBe("PDF snippet");
 	});
 
 	it("marks entity as failed when no search results found", async () => {
@@ -187,10 +188,31 @@ describe("EntityEnricher", () => {
 		expect(mockUpdateStatus).toHaveBeenCalledWith(1, "failed");
 	});
 
-	it("marks entity as failed when all page fetches return null", async () => {
+	it("falls back to Brave snippets when all page fetches return null", async () => {
 		mockFindPending.mockResolvedValue([PENDING_PERSON]);
 		mockBraveSearch.mockResolvedValue([
-			{ title: "Result", url: "https://example.com", description: "Desc" },
+			{ title: "Bio", url: "https://af.mil/bio/kim", description: "Col. Sarah Kim serves as Director of Cloud Ops at AFLCMC" },
+		]);
+		mockFetchPageText.mockResolvedValue(null);
+		mockExtract.mockResolvedValue(DOSSIER_RESULT);
+		mockInsertEnriched.mockResolvedValue("stakeholder-id-1");
+		mockUpdateStatus.mockResolvedValue(undefined);
+
+		const enricher = new EntityEnricher(mockEnv);
+		const result = await enricher.enrichPending();
+
+		expect(result.entitiesEnriched).toBe(1);
+		expect(result.entitiesFailed).toBe(0);
+		expect(mockExtract).toHaveBeenCalledOnce();
+		const extractCall = mockExtract.mock.calls[0][0];
+		expect(extractCall.pageContents).toHaveLength(1);
+		expect(extractCall.pageContents[0].text).toBe("Col. Sarah Kim serves as Director of Cloud Ops at AFLCMC");
+	});
+
+	it("marks entity as failed when page fetches and snippets are both empty", async () => {
+		mockFindPending.mockResolvedValue([PENDING_PERSON]);
+		mockBraveSearch.mockResolvedValue([
+			{ title: "Result", url: "https://example.com", description: "" },
 		]);
 		mockFetchPageText.mockResolvedValue(null);
 		mockUpdateStatus.mockResolvedValue(undefined);

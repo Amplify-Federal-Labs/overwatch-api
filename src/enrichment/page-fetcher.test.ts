@@ -15,8 +15,8 @@ describe("fetchPageText", () => {
 		expect(result).toBe("Title Hello world");
 	});
 
-	it("truncates text to 4000 characters", async () => {
-		const longText = "a".repeat(5000);
+	it("truncates text to 10000 characters", async () => {
+		const longText = "a".repeat(15000);
 		const html = `<p>${longText}</p>`;
 		const fetcher = vi.fn().mockResolvedValue({
 			ok: true,
@@ -27,7 +27,7 @@ describe("fetchPageText", () => {
 		const result = await fetchPageText(fetcher, "https://example.com");
 
 		expect(result).not.toBeNull();
-		expect(result!.length).toBeLessThanOrEqual(4000);
+		expect(result!.length).toBe(10000);
 	});
 
 	it("returns null on fetch error", async () => {
@@ -85,6 +85,19 @@ describe("fetchPageText", () => {
 		expect(result).toBe("Content");
 		expect(result).not.toContain("alert");
 		expect(result).not.toContain("color: red");
+	});
+
+	it("sends a browser-like User-Agent header", async () => {
+		const fetcher = vi.fn().mockResolvedValue({
+			ok: true,
+			headers: new Headers({ "content-type": "text/html" }),
+			text: () => Promise.resolve("<p>Hello</p>"),
+		});
+
+		await fetchPageText(fetcher, "https://example.com");
+
+		const [, options] = fetcher.mock.calls[0];
+		expect(options.headers["User-Agent"]).toContain("Mozilla/5.0");
 	});
 
 	it("collapses multiple whitespace into single spaces", async () => {

@@ -8,6 +8,8 @@ import { fetchFpdsContracts } from "./fpds-contracts-fetcher";
 import { entriesToSignals } from "./fpds-contracts-parser";
 import { fetchRssFeed } from "./rss-fetcher";
 import { rssItemsToSignals } from "./rss-parser";
+import { fetchSamGovOpportunities } from "./sam-gov-fetcher";
+import { opportunitiesToSignals } from "./sam-gov-parser";
 import { Logger } from "../logger";
 
 export interface RssFeedConfig {
@@ -99,8 +101,11 @@ export class SignalIngestor {
 			case "rss":
 				return this.fetchAllRssFeeds();
 			case "sam_gov":
+				return opportunitiesToSignals(
+					await fetchSamGovOpportunities(fetch, this.env.SAM_GOV_API_KEY, this.logger),
+				);
 			case "mil_announcement":
-				// TODO: implement these source connectors
+				// TODO: implement this source connector
 				return [];
 		}
 	}

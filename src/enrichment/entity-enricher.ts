@@ -78,6 +78,9 @@ export class EntityEnricher {
 					const text = await fetchPageText(fetch, result.url, this.logger);
 					if (text !== null) {
 						pageContents.push({ url: result.url, text });
+					} else if (result.description) {
+						this.logger.warn("Using search snippet as fallback", { url: result.url, entity: entity.value });
+						pageContents.push({ url: result.url, text: result.description });
 					}
 				}
 

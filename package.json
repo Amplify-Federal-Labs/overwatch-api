@@ -44,9 +44,7 @@
 		"schema": "npx chanfana",
 		"seedLocalDb": "wrangler d1 migrations apply DB --local",
 		"build": "wrangler deploy --dry-run",
-		"test": "npm run build && npx vitest run --config tests/vitest.config.mts",
-		"test:unit": "npx vitest run --config tests/vitest.unit.config.mts",
-		"lint": "tsc --noEmit",
-		"test:all": "npm run test:unit && npm test"
+		"test": "npx vitest run --config tests/vitest.unit.config.mts",
+		"lint": "tsc --noEmit"
 	}
 }

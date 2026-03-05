@@ -37,7 +37,12 @@ Outreach plays (pick the best match or null):
 - "jumpfence": Implementation blockers
 - "classifiedai": IL5, IL6, MLOps, APFIT
 
-Relevance scoring (0-100): Score based on alignment with Amplify's competencies, contract size/visibility, and strategic importance. 90+ = strong direct match, 75-89 = relevant, below 75 = tangential.
+Relevance scoring (0-100) — score based on how actionable the signal is for Amplify:
+- 90-100: Direct contract opportunity (RFP, RFI, sources sought, task order) matching Amplify's competencies, or a policy/budget decision that directly creates contract opportunities for Amplify
+- 75-89: Named DoD program or agency initiative Amplify could realistically pursue; competitor winning a contract in Amplify's space
+- 50-74: Industry trends, leadership changes, or policy shifts that provide useful context but do not represent actionable opportunities
+- Below 50: Tangentially related news with no clear path to Amplify revenue
+Key question: Does this signal represent or lead to a specific contract opportunity Amplify could pursue? If not, score below 75.
 
 Entity confidence scoring (0.0-1.0): Score how certain you are that this entity is correctly identified in the source material.
 - 0.9-1.0: Entity is explicitly named in the text (e.g., "NIWC Pacific issued...")

@@ -9,8 +9,8 @@ export interface BraveSearchResult {
 	description: string;
 }
 
-const PERSON_SITE_FILTERS = "site:mil OR site:defense.gov OR site:afcea.org";
-const AGENCY_SITE_FILTERS = "site:mil OR site:defense.gov";
+const PERSON_SITE_FILTERS = "site:mil OR site:defense.gov OR site:afcea.org OR site:govexec.com OR site:federalnewsnetwork.com OR site:executivegov.com OR site:linkedin.com";
+const AGENCY_SITE_FILTERS = "site:mil OR site:defense.gov OR site:govexec.com OR site:federalnewsnetwork.com OR site:executivegov.com";
 
 export function buildSearchQuery(entityValue: string, entityType: EntityType): string {
 	const quoted = `"${entityValue}"`;

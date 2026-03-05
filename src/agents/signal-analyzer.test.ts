@@ -121,6 +121,27 @@ describe("SignalAnalyzer", () => {
 			expect(systemPrompt).toContain("below 0.5");
 		});
 
+		it("includes actionable relevance scoring rubric in the system prompt", async () => {
+			const agent = new SignalAnalyzer(mockEnv);
+			mockCreate.mockResolvedValueOnce({
+				choices: [{ message: { content: JSON.stringify(VALID_RESULT) } }],
+			});
+
+			await agent.analyze(SAMPLE_INPUT);
+
+			const systemPrompt: string = mockCreate.mock.calls[0][0].messages[0].content;
+			// 90-100 tier requires direct contract opportunities
+			expect(systemPrompt).toContain("90-100");
+			expect(systemPrompt).toMatch(/90-100.*contract opportunit/is);
+			// 75-89 tier requires named DoD programs or competitor contract wins
+			expect(systemPrompt).toContain("75-89");
+			expect(systemPrompt).toMatch(/75-89.*DoD program/is);
+			// 50-74 tier for industry trends without actionable opportunities
+			expect(systemPrompt).toContain("50-74");
+			// Below 50 for tangential news
+			expect(systemPrompt).toMatch(/below 50/i);
+		});
+
 		it("includes all outreach plays in the system prompt", async () => {
 			const agent = new SignalAnalyzer(mockEnv);
 			mockCreate.mockResolvedValueOnce({

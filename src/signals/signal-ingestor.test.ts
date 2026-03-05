@@ -10,6 +10,8 @@ const mockFetchFpdsContracts = vi.fn();
 const mockEntriesToSignals = vi.fn();
 const mockFetchRssFeed = vi.fn();
 const mockRssItemsToSignals = vi.fn();
+const mockFetchSamGovOpportunities = vi.fn();
+const mockOpportunitiesToSignals = vi.fn();
 const mockMatch = vi.fn();
 const mockInsertMany = vi.fn();
 
@@ -58,6 +60,14 @@ vi.mock("./rss-parser", () => ({
 	rssItemsToSignals: (...args: unknown[]) => mockRssItemsToSignals(...args),
 }));
 
+vi.mock("./sam-gov-fetcher", () => ({
+	fetchSamGovOpportunities: (...args: unknown[]) => mockFetchSamGovOpportunities(...args),
+}));
+
+vi.mock("./sam-gov-parser", () => ({
+	opportunitiesToSignals: (...args: unknown[]) => mockOpportunitiesToSignals(...args),
+}));
+
 function makeEnv(overrides?: Partial<Env>): Env {
 	return {
 		DB: {} as D1Database,
@@ -65,6 +75,7 @@ function makeEnv(overrides?: Partial<Env>): Env {
 		CF_AIG_BASEURL: "https://test.example.com",
 		CF_AIG_MODEL: "test-model",
 		BRAVE_SEARCH_API_KEY: "test-brave-key",
+		SAM_GOV_API_KEY: "test-sam-key",
 		LOG_LEVEL: "ERROR",
 		...overrides,
 	};
@@ -122,6 +133,8 @@ describe("SignalIngestor.ingest", () => {
 		mockEntriesToSignals.mockReset();
 		mockFetchRssFeed.mockReset();
 		mockRssItemsToSignals.mockReset();
+		mockFetchSamGovOpportunities.mockReset();
+		mockOpportunitiesToSignals.mockReset();
 		mockMatch.mockReset();
 		mockInsertMany.mockReset();
 		mockExistsBySourceLink.mockResolvedValue(false);
@@ -129,6 +142,8 @@ describe("SignalIngestor.ingest", () => {
 		mockEntriesToSignals.mockReturnValue([]);
 		mockFetchRssFeed.mockResolvedValue([]);
 		mockRssItemsToSignals.mockReturnValue([]);
+		mockFetchSamGovOpportunities.mockResolvedValue([]);
+		mockOpportunitiesToSignals.mockReturnValue([]);
 		mockMatch.mockResolvedValue({ matchedIds: [], discoveredEntities: [] });
 		mockInsertMany.mockResolvedValue(0);
 	});
@@ -441,5 +456,38 @@ describe("SignalIngestor.ingest", () => {
 		const result = await ingestor.ingest();
 
 		expect(result.sourcesChecked).toBe(3);
+	});
+
+	it("should fetch and convert SAM.gov opportunities when sources includes sam_gov", async () => {
+		const samOpps = [{ noticeId: "opp001", title: "Cloud Migration" }];
+		mockFetchSamGovOpportunities.mockResolvedValue(samOpps);
+		mockOpportunitiesToSignals.mockReturnValue([{
+			content: "SAM.gov Opportunity — Solicitation\nCloud Migration",
+			sourceType: "sam_gov" as const,
+			sourceName: "SAM.gov",
+			sourceLink: "sam://opp001",
+			sourceUrl: "https://sam.gov/opp/opp001/view",
+		}]);
+		mockAnalyze.mockResolvedValue(MOCK_ANALYSIS_RESULT);
+
+		const ingestor = new SignalIngestor(makeEnv());
+		const result = await ingestor.ingest(["sam_gov"]);
+
+		expect(result.sourcesChecked).toBe(1);
+		expect(mockFetchSamGovOpportunities).toHaveBeenCalledWith(
+			expect.anything(),
+			"test-sam-key",
+			expect.anything(),
+		);
+		expect(mockOpportunitiesToSignals).toHaveBeenCalledWith(samOpps);
+		expect(result.signalsFound).toBe(1);
+		expect(result.signalsAnalyzed).toBe(1);
+	});
+
+	it("should not fetch SAM.gov when sources filter excludes it", async () => {
+		const ingestor = new SignalIngestor(makeEnv());
+		await ingestor.ingest(["fpds"]);
+
+		expect(mockFetchSamGovOpportunities).not.toHaveBeenCalled();
 	});
 });

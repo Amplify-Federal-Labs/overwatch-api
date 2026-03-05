@@ -2,14 +2,27 @@ import { describe, it, expect, vi } from "vitest";
 import { braveSearch, buildSearchQuery } from "./brave-searcher";
 
 describe("buildSearchQuery", () => {
-	it("builds a person search query with military site filters", () => {
+	it("builds a person search query with military and govcon site filters", () => {
 		const query = buildSearchQuery("Col. Sarah Kim", "person");
-		expect(query).toBe('"Col. Sarah Kim" site:mil OR site:defense.gov OR site:afcea.org');
+		expect(query).toContain('"Col. Sarah Kim"');
+		expect(query).toContain("site:mil");
+		expect(query).toContain("site:defense.gov");
+		expect(query).toContain("site:afcea.org");
+		expect(query).toContain("site:govexec.com");
+		expect(query).toContain("site:federalnewsnetwork.com");
+		expect(query).toContain("site:executivegov.com");
+		expect(query).toContain("site:linkedin.com");
 	});
 
-	it("builds an agency search query with government site filters", () => {
+	it("builds an agency search query with government and govcon site filters", () => {
 		const query = buildSearchQuery("Space Force Delta 6", "agency");
-		expect(query).toBe('"Space Force Delta 6" site:mil OR site:defense.gov');
+		expect(query).toContain('"Space Force Delta 6"');
+		expect(query).toContain("site:mil");
+		expect(query).toContain("site:defense.gov");
+		expect(query).toContain("site:govexec.com");
+		expect(query).toContain("site:federalnewsnetwork.com");
+		expect(query).toContain("site:executivegov.com");
+		expect(query).not.toContain("site:linkedin.com");
 	});
 });
 
