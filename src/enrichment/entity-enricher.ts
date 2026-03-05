@@ -1,3 +1,4 @@
+import type { PendingEntity } from "../db/discovered-entity-repository";
 import { DiscoveredEntityRepository } from "../db/discovered-entity-repository";
 import { D1StakeholderRepository } from "../db/stakeholder-repository";
 import { braveSearch, buildSearchQuery } from "./brave-searcher";
@@ -22,16 +23,29 @@ export class EntityEnricher {
 
 	async enrichPending(): Promise<EnrichmentResult> {
 		const entityRepo = new DiscoveredEntityRepository(this.env.DB);
+		const entities = await entityRepo.findPending();
+		return this.enrichEntities(entities, entityRepo);
+	}
+
+	async enrichFailed(): Promise<EnrichmentResult> {
+		const entityRepo = new DiscoveredEntityRepository(this.env.DB);
+		const entities = await entityRepo.findFailed();
+		return this.enrichEntities(entities, entityRepo);
+	}
+
+	private async enrichEntities(
+		entities: PendingEntity[],
+		entityRepo: DiscoveredEntityRepository,
+	): Promise<EnrichmentResult> {
 		const stakeholderRepo = new D1StakeholderRepository(this.env.DB);
 		const extractor = new DossierExtractor(this.env);
 
-		const pending = await entityRepo.findPending();
 		let entitiesEnriched = 0;
 		let entitiesFailed = 0;
 
 		const STAKEHOLDER_TYPES = ["person", "agency"] as const;
 
-		for (const entity of pending) {
+		for (const entity of entities) {
 			try {
 				if (!STAKEHOLDER_TYPES.includes(entity.type as "person" | "agency")) {
 					await entityRepo.updateStatus(entity.id, "skipped");
@@ -93,7 +107,7 @@ export class EntityEnricher {
 		}
 
 		return {
-			entitiesProcessed: pending.length,
+			entitiesProcessed: entities.length,
 			entitiesEnriched,
 			entitiesFailed,
 		};

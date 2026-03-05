@@ -19,6 +19,10 @@ export const CRON_JOBS: readonly CronJob[] = [
 		name: "enrichment",
 		run: (env) => new EntityEnricher(env).enrichPending(),
 	},
+	{
+		name: "enrichFailed",
+		run: (env) => new EntityEnricher(env).enrichFailed(),
+	},
 ] as const;
 
 export function getScheduledJob(utcHour: number): CronJob {

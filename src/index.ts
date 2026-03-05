@@ -2,14 +2,13 @@ import { ApiException, fromHono } from "chanfana";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { ContentfulStatusCode } from "hono/utils/http-status";
-import { tasksRouter } from "./endpoints/tasks/router";
-import { DummyEndpoint } from "./endpoints/dummyEndpoint";
 import { kpisRouter } from "./endpoints/kpis/router";
 import { signalsRouter } from "./endpoints/signals/router";
 import { stakeholdersRouter } from "./endpoints/stakeholders/router";
 import { competitorsRouter } from "./endpoints/competitors/router";
 import { interactionsRouter } from "./endpoints/interactions/router";
 import { draftsRouter } from "./endpoints/drafts/router";
+import { cronRouter } from "./endpoints/cron/router";
 import { getScheduledJob } from "./cron/scheduler";
 
 // Start a Hono app
@@ -60,16 +59,13 @@ const openapi = fromHono(app, {
 });
 
 // Register routers
-openapi.route("/tasks", tasksRouter);
 openapi.route("/kpis", kpisRouter);
 openapi.route("/signals", signalsRouter);
 openapi.route("/stakeholders", stakeholdersRouter);
 openapi.route("/competitors", competitorsRouter);
 openapi.route("/interactions", interactionsRouter);
 openapi.route("/drafts", draftsRouter);
-
-// Register other endpoints
-openapi.post("/dummy/:slug", DummyEndpoint);
+openapi.route("/cron", cronRouter);
 
 // Named export for testing (Hono's app.request() method)
 export { app };

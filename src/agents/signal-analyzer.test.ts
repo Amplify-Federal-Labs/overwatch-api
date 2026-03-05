@@ -106,6 +106,21 @@ describe("SignalAnalyzer", () => {
 			expect(systemPrompt).toContain("F: ISR/GEOINT/Distributed Systems");
 		});
 
+		it("includes entity confidence scoring rubric in the system prompt", async () => {
+			const agent = new SignalAnalyzer(mockEnv);
+			mockCreate.mockResolvedValueOnce({
+				choices: [{ message: { content: JSON.stringify(VALID_RESULT) } }],
+			});
+
+			await agent.analyze(SAMPLE_INPUT);
+
+			const systemPrompt: string = mockCreate.mock.calls[0][0].messages[0].content;
+			expect(systemPrompt).toContain("0.9-1.0");
+			expect(systemPrompt).toContain("0.7-0.89");
+			expect(systemPrompt).toContain("0.5-0.69");
+			expect(systemPrompt).toContain("below 0.5");
+		});
+
 		it("includes all outreach plays in the system prompt", async () => {
 			const agent = new SignalAnalyzer(mockEnv);
 			mockCreate.mockResolvedValueOnce({
@@ -182,6 +197,19 @@ describe("SignalAnalyzer", () => {
 			const result = await agent.analyze(SAMPLE_INPUT);
 			expect(result.title).toBe("Test");
 			expect(result.type).toBe("opportunity");
+		});
+
+		it("recovers from JSON with missing colon after property name", async () => {
+			const agent = new SignalAnalyzer(mockEnv);
+			// Simulates the production error: "Expected ':' after property name in JSON"
+			const malformed = '{"title": "FedScoop Signal", "summary" "This is a test summary", "type": "strategy", "branch": "Other", "tags": [], "competencies": [], "play": null, "relevance": 50, "entities": []}';
+			mockCreate.mockResolvedValueOnce({
+				choices: [{ message: { content: malformed } }],
+			});
+
+			const result = await agent.analyze(SAMPLE_INPUT);
+			expect(result.title).toBe("FedScoop Signal");
+			expect(result.summary).toBe("This is a test summary");
 		});
 
 		it("throws on completely invalid JSON", async () => {

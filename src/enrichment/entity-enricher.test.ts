@@ -10,9 +10,12 @@ const mockBraveSearch = vi.fn();
 const mockFetchPageText = vi.fn();
 const mockExtract = vi.fn();
 
+const mockFindFailed = vi.fn();
+
 vi.mock("../db/discovered-entity-repository", () => ({
 	DiscoveredEntityRepository: class {
 		findPending = mockFindPending;
+		findFailed = mockFindFailed;
 		updateStatus = mockUpdateStatus;
 	},
 }));
@@ -216,6 +219,40 @@ describe("EntityEnricher", () => {
 		expect(result.entitiesProcessed).toBe(2);
 		expect(result.entitiesEnriched).toBe(1);
 		expect(result.entitiesFailed).toBe(1);
+	});
+
+	describe("enrichFailed", () => {
+		it("re-enriches entities with failed status", async () => {
+			mockFindFailed.mockResolvedValue([PENDING_PERSON]);
+			mockBraveSearch.mockResolvedValue([
+				{ title: "Bio", url: "https://af.mil/bio/kim", description: "Official bio" },
+			]);
+			mockFetchPageText.mockResolvedValue("Col. Sarah Kim serves as Director...");
+			mockExtract.mockResolvedValue(DOSSIER_RESULT);
+			mockInsertEnriched.mockResolvedValue("stakeholder-id-1");
+			mockUpdateStatus.mockResolvedValue(undefined);
+
+			const enricher = new EntityEnricher(mockEnv);
+			const result = await enricher.enrichFailed();
+
+			expect(result.entitiesProcessed).toBe(1);
+			expect(result.entitiesEnriched).toBe(1);
+			expect(result.entitiesFailed).toBe(0);
+			expect(mockFindFailed).toHaveBeenCalledOnce();
+			expect(mockFindPending).not.toHaveBeenCalled();
+			expect(mockUpdateStatus).toHaveBeenCalledWith(1, "enriched");
+		});
+
+		it("returns zero counts when no failed entities", async () => {
+			mockFindFailed.mockResolvedValue([]);
+
+			const enricher = new EntityEnricher(mockEnv);
+			const result = await enricher.enrichFailed();
+
+			expect(result.entitiesProcessed).toBe(0);
+			expect(result.entitiesEnriched).toBe(0);
+			expect(result.entitiesFailed).toBe(0);
+		});
 	});
 
 	it("marks entity as failed when extractor throws", async () => {

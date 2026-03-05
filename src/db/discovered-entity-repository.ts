@@ -65,6 +65,22 @@ export class DiscoveredEntityRepository {
 		return rows;
 	}
 
+	async findFailed(limit: number = 10): Promise<PendingEntity[]> {
+		const rows = await this.db
+			.select({
+				id: discoveredEntities.id,
+				signalId: discoveredEntities.signalId,
+				type: discoveredEntities.type,
+				value: discoveredEntities.value,
+				confidence: discoveredEntities.confidence,
+				signalRelevance: discoveredEntities.signalRelevance,
+			})
+			.from(discoveredEntities)
+			.where(eq(discoveredEntities.status, "failed"))
+			.limit(limit);
+		return rows;
+	}
+
 	async updateStatus(id: number, status: string): Promise<void> {
 		await this.db
 			.update(discoveredEntities)

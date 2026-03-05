@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { jsonrepair } from "jsonrepair";
 import type { SignalAnalysisInput, SignalAnalysisResult } from "../schemas";
 
 const SYSTEM_PROMPT = `You are an intelligence analyst for Amplify Federal, a ~20-person SDVOSB defense consulting firm.
@@ -37,6 +38,12 @@ Outreach plays (pick the best match or null):
 - "classifiedai": IL5, IL6, MLOps, APFIT
 
 Relevance scoring (0-100): Score based on alignment with Amplify's competencies, contract size/visibility, and strategic importance. 90+ = strong direct match, 75-89 = relevant, below 75 = tangential.
+
+Entity confidence scoring (0.0-1.0): Score how certain you are that this entity is correctly identified in the source material.
+- 0.9-1.0: Entity is explicitly named in the text (e.g., "NIWC Pacific issued...")
+- 0.7-0.89: Entity is clearly referenced but not by exact name (e.g., "the Navy's Pacific IT center")
+- 0.5-0.69: Entity is inferred from context (e.g., a program implied by contract details)
+- below 0.5: Speculative — entity is guessed from indirect references
 
 Return ONLY valid JSON. No markdown fences, no commentary.`;
 
@@ -83,46 +90,9 @@ ${input.content}
 		try {
 			parsed = JSON.parse(cleaned);
 		} catch {
-			parsed = JSON.parse(this.repairTruncatedJson(cleaned));
+			parsed = JSON.parse(jsonrepair(cleaned));
 		}
 		return this.validateResult(parsed);
-	}
-
-	private repairTruncatedJson(json: string): string {
-		let repaired = json.trimEnd();
-
-		// Close any unterminated string
-		const quoteCount = (repaired.match(/(?<!\\)"/g) ?? []).length;
-		if (quoteCount % 2 !== 0) {
-			repaired += '"';
-		}
-
-		// Walk the string to find unclosed brackets/braces
-		const stack: string[] = [];
-		let inString = false;
-		for (let i = 0; i < repaired.length; i++) {
-			const ch = repaired[i];
-			if (ch === "\\" && inString) {
-				i++; // skip escaped character
-				continue;
-			}
-			if (ch === '"') {
-				inString = !inString;
-				continue;
-			}
-			if (inString) continue;
-			if (ch === "{" || ch === "[") stack.push(ch);
-			if (ch === "}") stack.pop();
-			if (ch === "]") stack.pop();
-		}
-
-		// Close any remaining open brackets/braces in reverse order
-		while (stack.length > 0) {
-			const opener = stack.pop();
-			repaired += opener === "{" ? "}" : "]";
-		}
-
-		return repaired;
 	}
 
 	private stripMarkdownFences(text: string): string {
