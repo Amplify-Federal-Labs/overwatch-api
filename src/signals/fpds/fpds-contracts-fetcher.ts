@@ -1,7 +1,7 @@
-import type { FetchFn } from "./types";
+import type { FetchFn } from "../types";
 import type { FpdsContractEntry } from "./fpds-contracts-parser";
 import { parseFpdsAtomEntries, extractNextPageUrl } from "./fpds-contracts-parser";
-import type { Logger } from "../logger";
+import type { Logger } from "../../logger";
 
 export function buildFpdsUrl(): string {
 	const end = new Date();

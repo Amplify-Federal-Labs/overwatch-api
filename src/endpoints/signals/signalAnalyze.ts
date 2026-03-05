@@ -1,7 +1,7 @@
 import { contentJson, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { SignalAnalysisInputSchema, SignalAnalysisResultSchema } from "../../schemas";
-import { SignalAnalyzer } from "../../agents/signal-analyzer";
+import { SignalAnalyzer } from "../../signals/signal-analyzer";
 import type { AppContext } from "../../types";
 
 export class SignalAnalyze extends OpenAPIRoute {

@@ -1,7 +1,7 @@
-import type { FetchFn } from "./types";
+import type { FetchFn } from "../types";
 import type { SamGovOpportunity } from "./sam-gov-parser";
 import { parseSamGovResponse } from "./sam-gov-parser";
-import type { Logger } from "../logger";
+import type { Logger } from "../../logger";
 
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 5;

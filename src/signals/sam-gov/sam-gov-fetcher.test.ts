@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { fetchSamGovOpportunities, buildSamGovUrl } from "./sam-gov-fetcher";
-import { Logger } from "../logger";
+import { Logger } from "../../logger";
 
 const logger = new Logger("ERROR");
 

@@ -1,15 +1,15 @@
 import type { SignalAnalysisInput, SignalSourceType } from "../schemas";
-import { SignalAnalyzer } from "../agents/signal-analyzer";
+import { SignalAnalyzer } from "./signal-analyzer";
 import { SignalRepository } from "../db/signal-repository";
 import { DiscoveredEntityRepository } from "../db/discovered-entity-repository";
 import { MockStakeholderRepository } from "../db/stakeholder-repository";
 import { StakeholderMatcher } from "./stakeholder-matcher";
-import { fetchFpdsContracts } from "./fpds-contracts-fetcher";
-import { entriesToSignals } from "./fpds-contracts-parser";
-import { fetchRssFeed } from "./rss-fetcher";
-import { rssItemsToSignals } from "./rss-parser";
-import { fetchSamGovOpportunities } from "./sam-gov-fetcher";
-import { opportunitiesToSignals } from "./sam-gov-parser";
+import { fetchFpdsContracts } from "./fpds/fpds-contracts-fetcher";
+import { entriesToSignals } from "./fpds/fpds-contracts-parser";
+import { fetchRssFeed } from "./rss/rss-fetcher";
+import { rssItemsToSignals } from "./rss/rss-parser";
+import { fetchSamGovOpportunities } from "./sam-gov/sam-gov-fetcher";
+import { opportunitiesToSignals } from "./sam-gov/sam-gov-parser";
 import { Logger } from "../logger";
 
 export interface RssFeedConfig {

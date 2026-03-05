@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import type { SignalAnalysisInput, FpdsContractMetadata } from "../schemas";
+import type { SignalAnalysisInput, FpdsContractMetadata } from "../../schemas";
 
 export interface FpdsContractEntry {
 	piid: string;

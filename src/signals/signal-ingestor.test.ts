@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SignalIngestor } from "./signal-ingestor";
 import type { SignalAnalysisResult } from "../schemas";
-import type { FpdsContractEntry } from "./fpds-contracts-parser";
+import type { FpdsContractEntry } from "./fpds/fpds-contracts-parser";
 
 const mockAnalyze = vi.fn();
 const mockInsert = vi.fn();
@@ -15,7 +15,7 @@ const mockOpportunitiesToSignals = vi.fn();
 const mockMatch = vi.fn();
 const mockInsertMany = vi.fn();
 
-vi.mock("../agents/signal-analyzer", () => ({
+vi.mock("./signal-analyzer", () => ({
 	SignalAnalyzer: class MockSignalAnalyzer {
 		analyze = mockAnalyze;
 	},
@@ -44,27 +44,27 @@ vi.mock("./stakeholder-matcher", () => ({
 	},
 }));
 
-vi.mock("./fpds-contracts-fetcher", () => ({
+vi.mock("./fpds/fpds-contracts-fetcher", () => ({
 	fetchFpdsContracts: (...args: unknown[]) => mockFetchFpdsContracts(...args),
 }));
 
-vi.mock("./fpds-contracts-parser", () => ({
+vi.mock("./fpds/fpds-contracts-parser", () => ({
 	entriesToSignals: (...args: unknown[]) => mockEntriesToSignals(...args),
 }));
 
-vi.mock("./rss-fetcher", () => ({
+vi.mock("./rss/rss-fetcher", () => ({
 	fetchRssFeed: (...args: unknown[]) => mockFetchRssFeed(...args),
 }));
 
-vi.mock("./rss-parser", () => ({
+vi.mock("./rss/rss-parser", () => ({
 	rssItemsToSignals: (...args: unknown[]) => mockRssItemsToSignals(...args),
 }));
 
-vi.mock("./sam-gov-fetcher", () => ({
+vi.mock("./sam-gov/sam-gov-fetcher", () => ({
 	fetchSamGovOpportunities: (...args: unknown[]) => mockFetchSamGovOpportunities(...args),
 }));
 
-vi.mock("./sam-gov-parser", () => ({
+vi.mock("./sam-gov/sam-gov-parser", () => ({
 	opportunitiesToSignals: (...args: unknown[]) => mockOpportunitiesToSignals(...args),
 }));
 

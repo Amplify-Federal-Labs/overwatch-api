@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import type { SignalAnalysisInput } from "../schemas";
+import type { SignalAnalysisInput } from "../../schemas";
 
 export interface RssItem {
 	title: string;

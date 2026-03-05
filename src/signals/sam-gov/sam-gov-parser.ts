@@ -1,4 +1,4 @@
-import type { SignalAnalysisInput } from "../schemas";
+import type { SignalAnalysisInput } from "../../schemas";
 
 export interface SamGovPointOfContact {
 	fullName?: string;
