@@ -2,13 +2,14 @@ import { describe, it, expect } from "vitest";
 import { getScheduledJob, CRON_JOBS } from "./scheduler";
 
 describe("CRON_JOBS", () => {
-	it("has five jobs in order: fpds, rss, sam_gov, enrichment, enrichFailed", () => {
-		expect(CRON_JOBS).toHaveLength(5);
+	it("has six jobs in order: fpds, rss, sam_gov, sam_gov_apbi, enrichment, enrichFailed", () => {
+		expect(CRON_JOBS).toHaveLength(6);
 		expect(CRON_JOBS[0].name).toBe("fpds");
 		expect(CRON_JOBS[1].name).toBe("rss");
 		expect(CRON_JOBS[2].name).toBe("sam_gov");
-		expect(CRON_JOBS[3].name).toBe("enrichment");
-		expect(CRON_JOBS[4].name).toBe("enrichFailed");
+		expect(CRON_JOBS[3].name).toBe("sam_gov_apbi");
+		expect(CRON_JOBS[4].name).toBe("enrichment");
+		expect(CRON_JOBS[5].name).toBe("enrichFailed");
 	});
 });
 
@@ -25,22 +26,26 @@ describe("getScheduledJob", () => {
 		expect(getScheduledJob(2).name).toBe("sam_gov");
 	});
 
-	it("returns enrichment at hour 3", () => {
-		expect(getScheduledJob(3).name).toBe("enrichment");
+	it("returns sam_gov_apbi at hour 3", () => {
+		expect(getScheduledJob(3).name).toBe("sam_gov_apbi");
 	});
 
-	it("returns enrichFailed at hour 4", () => {
-		expect(getScheduledJob(4).name).toBe("enrichFailed");
+	it("returns enrichment at hour 4", () => {
+		expect(getScheduledJob(4).name).toBe("enrichment");
 	});
 
-	it("cycles back to fpds at hour 5", () => {
-		expect(getScheduledJob(5).name).toBe("fpds");
+	it("returns enrichFailed at hour 5", () => {
+		expect(getScheduledJob(5).name).toBe("enrichFailed");
+	});
+
+	it("cycles back to fpds at hour 6", () => {
+		expect(getScheduledJob(6).name).toBe("fpds");
 	});
 
 	it("cycles through all 24 hours correctly", () => {
-		const expected = ["fpds", "rss", "sam_gov", "enrichment", "enrichFailed"];
+		const expected = ["fpds", "rss", "sam_gov", "sam_gov_apbi", "enrichment", "enrichFailed"];
 		for (let hour = 0; hour < 24; hour++) {
-			expect(getScheduledJob(hour).name).toBe(expected[hour % 5]);
+			expect(getScheduledJob(hour).name).toBe(expected[hour % 6]);
 		}
 	});
 });

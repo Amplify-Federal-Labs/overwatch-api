@@ -8,6 +8,15 @@ const MAX_PAGES = 5;
 const LOOKBACK_DAYS = 3;
 
 const PROCUREMENT_TYPES = "o,r,p,k";
+const SPECIAL_NOTICE_TYPE = "s";
+
+export const APBI_KEYWORDS = [
+	"APBI",
+	"Advance Planning Briefing",
+	"Industry Day",
+	"Industry Conference",
+	"Forecast to Industry",
+];
 
 function formatDate(date: Date): string {
 	const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -34,16 +43,38 @@ export function buildSamGovUrl(apiKey: string, offset: number = 0): string {
 	return `https://api.sam.gov/opportunities/v2/search?${params}`;
 }
 
-export async function fetchSamGovOpportunities(
+export function buildApbiUrl(apiKey: string, offset: number = 0): string {
+	const now = new Date();
+	const from = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+
+	const params = new URLSearchParams({
+		api_key: apiKey,
+		postedFrom: formatDate(from),
+		postedTo: formatDate(now),
+		ptype: SPECIAL_NOTICE_TYPE,
+		limit: String(PAGE_LIMIT),
+		offset: String(offset),
+		organizationName: "Defense",
+		status: "active",
+		keyword: APBI_KEYWORDS.join(" OR "),
+	});
+
+	return `https://api.sam.gov/opportunities/v2/search?${params}`;
+}
+
+type UrlBuilder = (apiKey: string, offset: number) => string;
+
+async function fetchPaginated(
 	fetcher: FetchFn,
 	apiKey: string,
 	logger: Logger,
+	urlBuilder: UrlBuilder,
 ): Promise<SamGovOpportunity[]> {
 	const allOpps: SamGovOpportunity[] = [];
 
 	for (let page = 0; page < MAX_PAGES; page++) {
 		const offset = page * PAGE_LIMIT;
-		const url = buildSamGovUrl(apiKey, offset);
+		const url = urlBuilder(apiKey, offset);
 
 		let response: Response;
 		try {
@@ -68,4 +99,20 @@ export async function fetchSamGovOpportunities(
 	}
 
 	return allOpps;
+}
+
+export async function fetchSamGovOpportunities(
+	fetcher: FetchFn,
+	apiKey: string,
+	logger: Logger,
+): Promise<SamGovOpportunity[]> {
+	return fetchPaginated(fetcher, apiKey, logger, buildSamGovUrl);
+}
+
+export async function fetchApbiEvents(
+	fetcher: FetchFn,
+	apiKey: string,
+	logger: Logger,
+): Promise<SamGovOpportunity[]> {
+	return fetchPaginated(fetcher, apiKey, logger, buildApbiUrl);
 }

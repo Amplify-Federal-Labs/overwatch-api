@@ -11,6 +11,7 @@ const mockEntriesToSignals = vi.fn();
 const mockFetchRssFeed = vi.fn();
 const mockRssItemsToSignals = vi.fn();
 const mockFetchSamGovOpportunities = vi.fn();
+const mockFetchApbiEvents = vi.fn();
 const mockOpportunitiesToSignals = vi.fn();
 const mockMatch = vi.fn();
 const mockInsertMany = vi.fn();
@@ -62,6 +63,7 @@ vi.mock("./rss/rss-parser", () => ({
 
 vi.mock("./sam-gov/sam-gov-fetcher", () => ({
 	fetchSamGovOpportunities: (...args: unknown[]) => mockFetchSamGovOpportunities(...args),
+	fetchApbiEvents: (...args: unknown[]) => mockFetchApbiEvents(...args),
 }));
 
 vi.mock("./sam-gov/sam-gov-parser", () => ({
@@ -134,6 +136,7 @@ describe("SignalIngestor.ingest", () => {
 		mockFetchRssFeed.mockReset();
 		mockRssItemsToSignals.mockReset();
 		mockFetchSamGovOpportunities.mockReset();
+		mockFetchApbiEvents.mockReset();
 		mockOpportunitiesToSignals.mockReset();
 		mockMatch.mockReset();
 		mockInsertMany.mockReset();
@@ -143,6 +146,7 @@ describe("SignalIngestor.ingest", () => {
 		mockFetchRssFeed.mockResolvedValue([]);
 		mockRssItemsToSignals.mockReturnValue([]);
 		mockFetchSamGovOpportunities.mockResolvedValue([]);
+		mockFetchApbiEvents.mockResolvedValue([]);
 		mockOpportunitiesToSignals.mockReturnValue([]);
 		mockMatch.mockResolvedValue({ matchedIds: [], discoveredEntities: [] });
 		mockInsertMany.mockResolvedValue(0);
@@ -170,8 +174,8 @@ describe("SignalIngestor.ingest", () => {
 		const ingestor = new SignalIngestor(makeEnv());
 		const result = await ingestor.ingest();
 
-		// Should attempt to check all 3 source types: sam_gov, rss, fpds
-		expect(result.sourcesChecked).toBe(3);
+		// Should attempt to check all 4 source types: sam_gov, sam_gov_apbi, rss, fpds
+		expect(result.sourcesChecked).toBe(4);
 	});
 
 	it("should analyze each fetched signal via SignalAnalyzer", async () => {
@@ -455,7 +459,7 @@ describe("SignalIngestor.ingest", () => {
 		const ingestor = new SignalIngestor(makeEnv());
 		const result = await ingestor.ingest();
 
-		expect(result.sourcesChecked).toBe(3);
+		expect(result.sourcesChecked).toBe(4);
 	});
 
 	it("should fetch and convert SAM.gov opportunities when sources includes sam_gov", async () => {

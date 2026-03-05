@@ -20,6 +20,10 @@ export const CRON_JOBS: readonly CronJob[] = [
 		run: (env) => new SignalIngestor(env).ingest(["sam_gov"]),
 	},
 	{
+		name: "sam_gov_apbi",
+		run: (env) => new SignalIngestor(env).ingest(["sam_gov_apbi"]),
+	},
+	{
 		name: "enrichment",
 		run: (env) => new EntityEnricher(env).enrichPending(),
 	},

@@ -8,7 +8,7 @@ import { fetchFpdsContracts } from "./fpds/fpds-contracts-fetcher";
 import { entriesToSignals } from "./fpds/fpds-contracts-parser";
 import { fetchRssFeed } from "./rss/rss-fetcher";
 import { rssItemsToSignals } from "./rss/rss-parser";
-import { fetchSamGovOpportunities } from "./sam-gov/sam-gov-fetcher";
+import { fetchSamGovOpportunities, fetchApbiEvents } from "./sam-gov/sam-gov-fetcher";
 import { opportunitiesToSignals } from "./sam-gov/sam-gov-parser";
 import { Logger } from "../logger";
 
@@ -24,6 +24,7 @@ const RSS_FEEDS: readonly RssFeedConfig[] = [
 
 const SOURCE_TYPES: readonly SignalSourceType[] = [
 	"sam_gov",
+	"sam_gov_apbi",
 	"rss",
 	"fpds",
 ] as const;
@@ -103,6 +104,10 @@ export class SignalIngestor {
 			case "sam_gov":
 				return opportunitiesToSignals(
 					await fetchSamGovOpportunities(fetch, this.env.SAM_GOV_API_KEY, this.logger),
+				);
+			case "sam_gov_apbi":
+				return opportunitiesToSignals(
+					await fetchApbiEvents(fetch, this.env.SAM_GOV_API_KEY, this.logger),
 				);
 			case "mil_announcement":
 				// TODO: implement this source connector

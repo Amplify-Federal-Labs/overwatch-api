@@ -12,6 +12,7 @@ declare namespace Cloudflare {
 		CF_AIG_BASEURL: string;
 		CF_AIG_MODEL: string;
 		BRAVE_SEARCH_API_KEY: string;
+        SAM_GOV_API_KEY: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

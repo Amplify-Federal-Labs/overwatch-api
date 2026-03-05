@@ -17,6 +17,7 @@ export type PlayId = z.infer<typeof PlayIdEnum>;
 
 export const SignalSourceTypeEnum = z.enum([
 	"sam_gov",
+	"sam_gov_apbi",
 	"rss",
 	"mil_announcement",
 	"fpds",
