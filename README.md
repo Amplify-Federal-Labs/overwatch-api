@@ -1,72 +1,121 @@
-# OpenAPI Template
+# Overwatch API
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/chanfana-openapi-template)
+Backend API for **Overwatch**, Amplify Federal's intelligence and relationship management platform. Built on Cloudflare Workers with automated signal ingestion from government data sources, AI-powered analysis, and entity enrichment.
 
-![OpenAPI Template Preview](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/91076b39-1f5b-46f6-7f14-536a6f183000/public)
+## Tech Stack
 
-<!-- dash-content-start -->
-
-This is a Cloudflare Worker with OpenAPI 3.1 Auto Generation and Validation using [chanfana](https://github.com/cloudflare/chanfana) and [Hono](https://github.com/honojs/hono).
-
-This is an example project made to be used as a quick start into building OpenAPI compliant Workers that generates the
-`openapi.json` schema automatically from code and validates the incoming request to the defined parameters or request body.
-
-This template includes various endpoints, a D1 database, and integration tests using [Vitest](https://vitest.dev/) as examples. In endpoints, you will find [chanfana D1 AutoEndpoints](https://chanfana.com/endpoints/auto/d1) and a [normal endpoint](https://chanfana.com/endpoints/defining-endpoints) to serve as examples for your projects.
-
-Besides being able to see the OpenAPI schema (openapi.json) in the browser, you can also extract the schema locally no hassle by running this command `npm run schema`.
-
-<!-- dash-content-end -->
-
-> [!IMPORTANT]
-> When using C3 to create this project, select "no" when it asks if you want to deploy. You need to follow this project's [setup steps](https://github.com/cloudflare/templates/tree/main/openapi-template#setup-steps) before deploying.
+- **Runtime**: Cloudflare Workers
+- **Framework**: Hono + Chanfana (OpenAPI 3.1 auto-generation)
+- **Database**: Cloudflare D1 (SQLite) via Drizzle ORM
+- **AI**: Cloudflare Workers AI (signal analysis, dossier extraction)
+- **Validation**: Zod
+- **Testing**: Vitest
 
 ## Getting Started
 
-Outside of this repo, you can start a new project with this template using [C3](https://developers.cloudflare.com/pages/get-started/c3/) (the `create-cloudflare` CLI):
-
-```bash
-npm create cloudflare@latest -- --template=cloudflare/templates/openapi-template
-```
-
-A live public deployment of this template is available at [https://openapi-template.templates.workers.dev](https://openapi-template.templates.workers.dev)
-
-## Setup Steps
-
-1. Install the project dependencies with a package manager of your choice:
+1. Install dependencies from the monorepo root:
    ```bash
    npm install
    ```
-2. Create a [D1 database](https://developers.cloudflare.com/d1/get-started/) with the name "openapi-template-db":
+
+2. Create a [D1 database](https://developers.cloudflare.com/d1/get-started/):
    ```bash
-   npx wrangler d1 create openapi-template-db
+   npx wrangler d1 create overwatch-db
    ```
-   ...and update the `database_id` field in `wrangler.json` with the new database ID.
-3. Run the following db migration to initialize the database (notice the `migrations` directory in this project):
+   Update the `database_id` in `wrangler.jsonc`.
+
+3. Run migrations:
    ```bash
-   npx wrangler d1 migrations apply DB --remote
+   npx wrangler d1 migrations apply DB --local
    ```
-4. Deploy the project!
+
+4. Start the dev server:
    ```bash
-   npx wrangler deploy
+   npm run dev
    ```
-5. Monitor your worker
-   ```bash
-   npx wrangler tail
-   ```
+
+   OpenAPI docs available at `http://localhost:8787/`.
+
+## Commands
+
+```bash
+npm run dev         # Seed local D1 + start wrangler dev server (port 8787)
+npm test            # Run unit tests
+npm run lint        # TypeScript type checking
+npm run deploy      # Apply remote D1 migrations + deploy to Cloudflare
+npm run schema      # Generate OpenAPI spec
+npm run cf-typegen  # Regenerate worker-configuration.d.ts
+```
+
+## API Endpoints
+
+All endpoints return `{ success: boolean, result: T }`.
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | /kpis | Dashboard KPI metrics |
+| GET | /signals | Intelligence signals |
+| POST | /signals/analyze | AI-powered signal analysis |
+| GET | /stakeholders | Stakeholder dossiers |
+| GET | /competitors/activity | Competitor activity feed |
+| GET | /interactions | Interaction history |
+| GET | /drafts | Email drafts |
+| POST | /drafts/:id/accept | Accept a draft |
+| POST | /drafts/:id/reject | Reject a draft |
+| POST | /cron/:jobName | Trigger a cron job on-demand |
+| CRUD | /tasks/* | Task management |
+
+## Architecture
+
+### Signal Ingestion Pipeline
+
+Automated hourly via Cloudflare cron triggers:
+
+1. **Fetch** — Pull from FPDS.gov (DoD contracts), SAM.gov (opportunities + APBI events), RSS feeds (GovConWire, FedScoop)
+2. **Analyze** — Cloudflare Workers AI extracts structured intelligence (type, branch, tags, competencies, relevance score, outreach play, entities)
+3. **Match** — Extracted entities matched against existing stakeholders; new entities flagged for enrichment
+4. **Store** — Persisted to D1
+
+### Entity Enrichment Pipeline
+
+Discovered entities are enriched via subsequent cron runs:
+
+1. **Search** — Brave Search API with government/defense site filters
+2. **Fetch** — Retrieve full page content from search results
+3. **Extract** — AI extracts structured dossiers (name, title, org, programs, career history)
+4. **Store** — Enriched stakeholder data saved to D1
+
+### Cron Jobs
+
+Hourly cron cycles through: `fpds`, `rss`, `sam_gov`, `sam_gov_apbi`, `enrichment`, `enrichFailed`. Jobs can also be triggered on-demand via `POST /cron/:jobName`.
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `CF_AIG_TOKEN` | Cloudflare Workers AI token |
+| `CF_AIG_BASEURL` | Workers AI base URL |
+| `CF_AIG_MODEL` | AI model identifier |
+| `BRAVE_SEARCH_API_KEY` | Brave Search API key |
+| `SAM_GOV_API_KEY` | SAM.gov API key |
+| `LOG_LEVEL` | Logging level (DEBUG, INFO, WARN, ERROR) |
 
 ## Testing
 
-This template includes integration tests using [Vitest](https://vitest.dev/). To run the tests locally:
+Unit tests are colocated with source files. Run with:
 
 ```bash
-npm run test
+npm test
 ```
 
-Test files are located in the `tests/` directory, with examples demonstrating how to test your endpoints and database interactions.
+## Workspace
 
-## Project structure
+Part of the Overwatch monorepo:
 
-1. Your main router is defined in `src/index.ts`.
-2. Each endpoint has its own file in `src/endpoints/`.
-3. Integration tests are located in the `tests/` directory.
-4. For more information read the [chanfana documentation](https://chanfana.com/), [Hono documentation](https://hono.dev/docs), and [Vitest documentation](https://vitest.dev/guide/).
+```
+overwatch/
+├── overwatch-api/    # This project
+└── overwatch-web/    # Frontend SPA
+```
+
+The frontend imports types from this package via `import type { ... } from "overwatch-api/schemas"`.
