@@ -82,6 +82,7 @@ describe("EntityEnricher", () => {
 		CF_AIG_TOKEN: "test-token",
 		CF_AIG_BASEURL: "https://test.example.com",
 		CF_AIG_MODEL: "test-model",
+		LOG_LEVEL: "ERROR",
 	} as Env;
 
 	beforeEach(() => {
@@ -129,6 +130,8 @@ describe("EntityEnricher", () => {
 			fetch,
 			"test-brave-key",
 			'"Col. Sarah Kim" site:person',
+			5,
+			expect.anything(),
 		);
 
 		// Verify pages were fetched

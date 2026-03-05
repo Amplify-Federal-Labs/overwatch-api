@@ -10,6 +10,7 @@ import { interactionsRouter } from "./endpoints/interactions/router";
 import { draftsRouter } from "./endpoints/drafts/router";
 import { cronRouter } from "./endpoints/cron/router";
 import { getScheduledJob } from "./cron/scheduler";
+import { Logger } from "./logger";
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -34,7 +35,7 @@ app.onError((err, c) => {
 		);
 	}
 
-	console.error("Global error handler caught:", err); // Log the error if it's not known
+	new Logger(c.env.LOG_LEVEL).error("Global error handler caught", { error: err instanceof Error ? err : new Error(String(err)) });
 
 	// For other errors, return a generic 500 response
 	return c.json(
@@ -76,11 +77,12 @@ export default {
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
 		const hour = new Date(event.scheduledTime).getUTCHours();
 		const job = getScheduledJob(hour);
+		const logger = new Logger(env.LOG_LEVEL);
 		ctx.waitUntil(
 			job.run(env).then((result) => {
-				console.log(`Cron job "${job.name}" completed:`, JSON.stringify(result));
+				logger.info(`Cron job "${job.name}" completed`, { result });
 			}).catch((err) => {
-				console.error(`Cron job "${job.name}" failed:`, err);
+				logger.error(`Cron job "${job.name}" failed`, { error: err instanceof Error ? err : new Error(String(err)) });
 			})
 		);
 	},

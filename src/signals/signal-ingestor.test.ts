@@ -64,6 +64,8 @@ function makeEnv(overrides?: Partial<Env>): Env {
 		CF_AIG_TOKEN: "test-token",
 		CF_AIG_BASEURL: "https://test.example.com",
 		CF_AIG_MODEL: "test-model",
+		BRAVE_SEARCH_API_KEY: "test-brave-key",
+		LOG_LEVEL: "ERROR",
 		...overrides,
 	};
 }
@@ -273,10 +275,12 @@ describe("SignalIngestor.ingest", () => {
 		expect(mockFetchRssFeed).toHaveBeenCalledWith(
 			expect.anything(),
 			"https://www.govconwire.com/feed",
+			expect.anything(),
 		);
 		expect(mockFetchRssFeed).toHaveBeenCalledWith(
 			expect.anything(),
 			"https://fedscoop.com/feed/",
+			expect.anything(),
 		);
 		expect(mockRssItemsToSignals).toHaveBeenCalledWith(
 			[{ title: "Article" }],

@@ -10,6 +10,9 @@
 	"triggers": {
 		"crons": ["0 * * * *"]
 	},
+	"vars": {
+		"LOG_LEVEL": "ERROR"
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",

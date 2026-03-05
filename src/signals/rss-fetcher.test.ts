@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { fetchRssFeed } from "./rss-fetcher";
+import { Logger } from "../logger";
+
+const logger = new Logger("ERROR");
 
 const SAMPLE_RSS = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -22,7 +25,7 @@ describe("fetchRssFeed", () => {
 			text: () => Promise.resolve(SAMPLE_RSS),
 		});
 
-		const items = await fetchRssFeed(mockFetch, "https://example.com/feed");
+		const items = await fetchRssFeed(mockFetch, "https://example.com/feed", logger);
 
 		expect(mockFetch).toHaveBeenCalledWith("https://example.com/feed");
 		expect(items).toHaveLength(1);
@@ -32,7 +35,7 @@ describe("fetchRssFeed", () => {
 	it("should return empty array on fetch error", async () => {
 		const mockFetch = vi.fn().mockRejectedValue(new Error("Network error"));
 
-		const items = await fetchRssFeed(mockFetch, "https://example.com/feed");
+		const items = await fetchRssFeed(mockFetch, "https://example.com/feed", logger);
 
 		expect(items).toEqual([]);
 	});
@@ -43,7 +46,7 @@ describe("fetchRssFeed", () => {
 			status: 503,
 		});
 
-		const items = await fetchRssFeed(mockFetch, "https://example.com/feed");
+		const items = await fetchRssFeed(mockFetch, "https://example.com/feed", logger);
 
 		expect(items).toEqual([]);
 	});

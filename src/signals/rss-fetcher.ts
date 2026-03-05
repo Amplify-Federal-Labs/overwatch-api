@@ -1,18 +1,19 @@
 import type { FetchFn } from "./types";
 import type { RssItem } from "./rss-parser";
 import { parseRssFeed } from "./rss-parser";
+import type { Logger } from "../logger";
 
-export async function fetchRssFeed(fetcher: FetchFn, url: string): Promise<RssItem[]> {
+export async function fetchRssFeed(fetcher: FetchFn, url: string, logger: Logger): Promise<RssItem[]> {
 	let response: Response;
 	try {
 		response = await fetcher(url);
 	} catch {
-		console.error(`Failed to fetch RSS feed: ${url}`);
+		logger.error("Failed to fetch RSS feed", { url });
 		return [];
 	}
 
 	if (!response.ok) {
-		console.error(`RSS feed ${url} returned ${response.status}`);
+		logger.error("RSS feed returned error", { url, status: response.status });
 		return [];
 	}
 

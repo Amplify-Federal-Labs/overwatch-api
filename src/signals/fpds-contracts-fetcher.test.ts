@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { fetchFpdsContracts } from "./fpds-contracts-fetcher";
+import { Logger } from "../logger";
+
+const logger = new Logger("ERROR");
 
 const SAMPLE_FPDS_ATOM = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -45,7 +48,7 @@ describe("fetchFpdsContracts", () => {
 			.mockResolvedValueOnce(new Response(SAMPLE_FPDS_ATOM, { status: 200 }))
 			.mockResolvedValueOnce(new Response(EMPTY_FEED, { status: 200 }));
 
-		const entries = await fetchFpdsContracts(mockFetch);
+		const entries = await fetchFpdsContracts(mockFetch, logger);
 
 		expect(entries).toHaveLength(1);
 		expect(entries[0].piid).toBe("0001");
@@ -58,7 +61,7 @@ describe("fetchFpdsContracts", () => {
 			.mockResolvedValueOnce(new Response(SAMPLE_FPDS_ATOM, { status: 200 }))
 			.mockResolvedValueOnce(new Response(EMPTY_FEED, { status: 200 }));
 
-		const entries = await fetchFpdsContracts(mockFetch);
+		const entries = await fetchFpdsContracts(mockFetch, logger);
 
 		expect(entries[0].referencedPiid).toBe("W911W617D0001");
 		expect(entries[0].modNumber).toBe("15");
@@ -69,7 +72,7 @@ describe("fetchFpdsContracts", () => {
 			.mockResolvedValueOnce(new Response(SAMPLE_FPDS_ATOM, { status: 200 }))
 			.mockResolvedValueOnce(new Response(EMPTY_FEED, { status: 200 }));
 
-		const entries = await fetchFpdsContracts(mockFetch);
+		const entries = await fetchFpdsContracts(mockFetch, logger);
 
 		expect(entries[0].obligatedAmount).toBe("0.00");
 		expect(entries[0].totalObligatedAmount).toBe("38847444.67");
@@ -81,7 +84,7 @@ describe("fetchFpdsContracts", () => {
 		const mockFetch = vi.fn()
 			.mockRejectedValueOnce(new Error("Network error"));
 
-		const items = await fetchFpdsContracts(mockFetch);
+		const items = await fetchFpdsContracts(mockFetch, logger);
 		expect(items).toEqual([]);
 	});
 
@@ -89,7 +92,7 @@ describe("fetchFpdsContracts", () => {
 		const mockFetch = vi.fn()
 			.mockResolvedValueOnce(new Response("Server Error", { status: 500 }));
 
-		const items = await fetchFpdsContracts(mockFetch);
+		const items = await fetchFpdsContracts(mockFetch, logger);
 		expect(items).toEqual([]);
 	});
 
@@ -137,7 +140,7 @@ describe("fetchFpdsContracts", () => {
 			.mockResolvedValueOnce(new Response(page1, { status: 200 }))
 			.mockResolvedValueOnce(new Response(page2, { status: 200 }));
 
-		const entries = await fetchFpdsContracts(mockFetch);
+		const entries = await fetchFpdsContracts(mockFetch, logger);
 
 		expect(mockFetch).toHaveBeenCalledTimes(2);
 		expect(entries).toHaveLength(2);

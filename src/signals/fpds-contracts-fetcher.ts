@@ -1,6 +1,7 @@
 import type { FetchFn } from "./types";
 import type { FpdsContractEntry } from "./fpds-contracts-parser";
 import { parseFpdsAtomEntries, extractNextPageUrl } from "./fpds-contracts-parser";
+import type { Logger } from "../logger";
 
 export function buildFpdsUrl(): string {
 	const end = new Date();
@@ -11,7 +12,7 @@ export function buildFpdsUrl(): string {
 	return `https://www.fpds.gov/ezsearch/FEEDS/ATOM?FEEDNAME=PUBLIC&q=${encodeURIComponent(q)}&start=0`;
 }
 
-export async function fetchFpdsContracts(fetcher: FetchFn): Promise<FpdsContractEntry[]> {
+export async function fetchFpdsContracts(fetcher: FetchFn, logger: Logger): Promise<FpdsContractEntry[]> {
 	const allEntries: FpdsContractEntry[] = [];
 	const maxPages = 5;
 	let url: string | null = buildFpdsUrl();
@@ -21,12 +22,12 @@ export async function fetchFpdsContracts(fetcher: FetchFn): Promise<FpdsContract
 		try {
 			response = await fetcher(url);
 		} catch {
-			console.error("Failed to fetch FPDS ATOM feed");
+			logger.error("Failed to fetch FPDS ATOM feed", { url });
 			return allEntries;
 		}
 
 		if (!response.ok) {
-			console.error(`FPDS ATOM feed returned ${response.status}`);
+			logger.error("FPDS ATOM feed returned error", { url, status: response.status });
 			return allEntries;
 		}
 

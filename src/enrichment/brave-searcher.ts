@@ -1,4 +1,5 @@
 import type { EntityType } from "../schemas";
+import type { Logger } from "../logger";
 
 type FetchFn = typeof fetch;
 
@@ -22,6 +23,7 @@ export async function braveSearch(
 	apiKey: string,
 	query: string,
 	count: number = 5,
+	logger?: Logger,
 ): Promise<BraveSearchResult[]> {
 	try {
 		const params = new URLSearchParams({ q: query, count: String(count) });
@@ -35,7 +37,7 @@ export async function braveSearch(
 
 		if (!response.ok) {
 			const body = await response.text().catch(() => "");
-			console.error(`Brave Search ${response.status}: ${body} (URL: ${url})`);
+			logger?.error("Brave Search API error", { status: response.status, body, url });
 			return [];
 		}
 

@@ -4,6 +4,7 @@ import { D1StakeholderRepository } from "../db/stakeholder-repository";
 import { braveSearch, buildSearchQuery } from "./brave-searcher";
 import { fetchPageText } from "./page-fetcher";
 import { DossierExtractor } from "./dossier-extractor";
+import { Logger } from "../logger";
 
 
 const MAX_PAGES_TO_FETCH = 3;
@@ -16,9 +17,11 @@ export interface EnrichmentResult {
 
 export class EntityEnricher {
 	private env: Env;
+	private logger: Logger;
 
 	constructor(env: Env) {
 		this.env = env;
+		this.logger = new Logger(env.LOG_LEVEL);
 	}
 
 	async enrichPending(): Promise<EnrichmentResult> {
@@ -57,10 +60,12 @@ export class EntityEnricher {
 					fetch,
 					this.env.BRAVE_SEARCH_API_KEY,
 					query,
+					5,
+					this.logger,
 				);
 
 				if (searchResults.length === 0) {
-					console.warn(`no search result for ${query}`);
+					this.logger.error("No search results for entity", { entity: entity.value, query });
 					await entityRepo.updateStatus(entity.id, "failed");
 					entitiesFailed++;
 					continue;
@@ -70,13 +75,14 @@ export class EntityEnricher {
 				const pageContents: { url: string; text: string }[] = [];
 
 				for (const result of pagesToFetch) {
-					const text = await fetchPageText(fetch, result.url);
+					const text = await fetchPageText(fetch, result.url, this.logger);
 					if (text !== null) {
 						pageContents.push({ url: result.url, text });
 					}
 				}
 
 				if (pageContents.length === 0) {
+					this.logger.error("All page fetches returned empty", { entity: entity.value, urls: pagesToFetch.map((r) => r.url) });
 					await entityRepo.updateStatus(entity.id, "failed");
 					entitiesFailed++;
 					continue;
@@ -100,7 +106,7 @@ export class EntityEnricher {
 				await entityRepo.updateStatus(entity.id, "enriched");
 				entitiesEnriched++;
 			} catch (err) {
-				console.error(`Failed to enrich entity ${entity.value}:`, err);
+				this.logger.error("Failed to enrich entity", { entity: entity.value, error: err instanceof Error ? err : new Error(String(err)) });
 				await entityRepo.updateStatus(entity.id, "failed");
 				entitiesFailed++;
 			}
