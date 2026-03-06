@@ -9,7 +9,7 @@ import { competitorsRouter } from "./endpoints/competitors/router";
 import { interactionsRouter } from "./endpoints/interactions/router";
 import { draftsRouter } from "./endpoints/drafts/router";
 import { cronRouter } from "./endpoints/cron/router";
-import { getScheduledJob } from "./cron/scheduler";
+import { getScheduledJob, runCronJob } from "./cron/scheduler";
 import { Logger } from "./logger";
 import { etag } from "./middleware/etag";
 
@@ -75,6 +75,11 @@ openapi.route("/cron", cronRouter);
 // Named export for testing (Hono's app.request() method)
 export { app };
 
+// Export agent classes (required by Cloudflare Durable Objects)
+export { ObservationExtractorAgent } from "./agents/observation-extractor-agent";
+export { EntityResolverAgent } from "./agents/entity-resolver-agent";
+export { SynthesisAgent } from "./agents/synthesis-agent";
+
 // Export the Worker with fetch and scheduled handlers
 export default {
 	fetch: app.fetch,
@@ -83,7 +88,7 @@ export default {
 		const job = getScheduledJob(hour);
 		const logger = new Logger(env.LOG_LEVEL);
 		ctx.waitUntil(
-			job.run(env).then((result) => {
+			runCronJob(job, env).then((result) => {
 				logger.info(`Cron job "${job.name}" completed`, { result });
 			}).catch((err) => {
 				logger.error(`Cron job "${job.name}" failed`, { error: err instanceof Error ? err : new Error(String(err)) });

@@ -16,13 +16,14 @@
 		"publish": true
 	},
 	"dependencies": {
+		"agents": "^0.7.5",
 		"chanfana": "2.8.3",
 		"drizzle-orm": "^0.45.1",
 		"fast-xml-parser": "^5.4.2",
 		"hono": "4.11.1",
 		"jsonrepair": "^3.13.2",
 		"openai": "^6.25.0",
-		"zod": "3.25.67"
+		"zod": "^3.25.76"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "0.10.11",

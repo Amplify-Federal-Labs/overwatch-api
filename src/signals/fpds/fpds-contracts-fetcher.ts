@@ -1,4 +1,3 @@
-import type { FetchFn } from "../types";
 import type { FpdsContractEntry } from "./fpds-contracts-parser";
 import { parseFpdsAtomEntries, extractNextPageUrl } from "./fpds-contracts-parser";
 import type { Logger } from "../../logger";
@@ -12,7 +11,7 @@ export function buildFpdsUrl(): string {
 	return `https://www.fpds.gov/ezsearch/FEEDS/ATOM?FEEDNAME=PUBLIC&q=${encodeURIComponent(q)}&start=0`;
 }
 
-export async function fetchFpdsContracts(fetcher: FetchFn, logger: Logger): Promise<FpdsContractEntry[]> {
+export async function fetchFpdsContracts(fetcher: typeof fetch, logger: Logger): Promise<FpdsContractEntry[]> {
 	const allEntries: FpdsContractEntry[] = [];
 	const maxPages = 5;
 	let url: string | null = buildFpdsUrl();

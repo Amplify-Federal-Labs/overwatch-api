@@ -1,8 +1,6 @@
 import { contentJson, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { EmailDraftSchema } from "../../schemas";
-import { mockEmailDrafts } from "../../data/mock-drafts";
-import type { AppContext } from "../../types";
 
 export class DraftList extends OpenAPIRoute {
 	schema = {
@@ -20,7 +18,7 @@ export class DraftList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(_c: AppContext) {
-		return { success: true, result: mockEmailDrafts };
+	async handle() {
+		return { success: true, result: [] };
 	}
 }

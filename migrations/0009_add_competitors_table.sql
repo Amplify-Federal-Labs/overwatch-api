@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS competitors (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  uei TEXT,
+  duns TEXT,
+  recipient_id TEXT NOT NULL,
+  parent_name TEXT,
+  location_city TEXT,
+  location_state TEXT,
+  location_zip TEXT,
+  business_types TEXT NOT NULL DEFAULT '[]',
+  alternate_names TEXT NOT NULL DEFAULT '[]',
+  total_award_amount REAL NOT NULL DEFAULT 0,
+  total_transactions INTEGER NOT NULL DEFAULT 0,
+  threat_level TEXT NOT NULL DEFAULT 'low',
+  usa_spending_url TEXT NOT NULL,
+  discovered_entity_id INTEGER REFERENCES discovered_entities(id),
+  signal_ids TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL
+);

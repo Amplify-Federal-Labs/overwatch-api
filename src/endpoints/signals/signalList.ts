@@ -1,28 +1,37 @@
 import { contentJson, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { SignalSchema } from "../../schemas";
-import { SignalRepository } from "../../db/signal-repository";
+import { SignalViewSchema } from "../../schemas";
+import { ObservationRepository } from "../../db/observation-repository";
+import { EntityProfileRepository } from "../../db/entity-profile-repository";
+import { transformSignalForUi } from "./signal-transformer";
 import type { AppContext } from "../../types";
 
 export class SignalList extends OpenAPIRoute {
 	schema = {
 		tags: ["Signals"],
-		summary: "List all intelligence signals",
+		summary: "List all intelligence signals with observations",
 		operationId: "signal-list",
 		responses: {
 			"200": {
-				description: "Array of intelligence signals",
+				description: "Array of signals in UI-ready format",
 				...contentJson(z.object({
 					success: z.boolean(),
-					result: z.array(SignalSchema),
+					result: z.array(SignalViewSchema),
 				})),
 			},
 		},
 	};
 
 	async handle(c: AppContext) {
-		const repository = new SignalRepository(c.env.DB);
-		const signals = await repository.findAll();
-		return { success: true, result: signals };
+		const observationRepo = new ObservationRepository(c.env.DB);
+		const entityRepo = new EntityProfileRepository(c.env.DB);
+
+		const [signals, relevanceScores] = await Promise.all([
+			observationRepo.findSignalsWithObservations(),
+			entityRepo.findRelevanceScores(),
+		]);
+
+		const result = signals.map((signal) => transformSignalForUi(signal, relevanceScores));
+		return { success: true, result };
 	}
 }

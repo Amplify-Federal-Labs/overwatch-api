@@ -19,5 +19,17 @@
 			"database_name": "overwatch",
 			"database_id": "8f422500-2a40-4ce9-b4d4-4a2965144a94"
 		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{ "name": "OBSERVATION_EXTRACTOR", "class_name": "ObservationExtractorAgent" },
+			{ "name": "ENTITY_RESOLVER", "class_name": "EntityResolverAgent" },
+			{ "name": "SYNTHESIS", "class_name": "SynthesisAgent" }
+		]
+	},
+	"migrations": [
+		{ "tag": "v1", "new_sqlite_classes": ["ObservationExtractorAgent"] },
+		{ "tag": "v2", "new_sqlite_classes": ["EntityResolverAgent"] },
+		{ "tag": "v3", "new_sqlite_classes": ["SynthesisAgent"] }
 	]
 }

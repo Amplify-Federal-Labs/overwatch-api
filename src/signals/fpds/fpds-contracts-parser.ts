@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import type { SignalAnalysisInput, FpdsContractMetadata } from "../../schemas";
+import type { SignalAnalysisInput } from "../../schemas";
 
 export interface FpdsContractEntry {
 	piid: string;
@@ -67,12 +67,10 @@ export function parseFpdsAtomEntries(xml: string): FpdsContractEntry[] {
 		const award = content.award as Record<string, unknown> | undefined;
 		if (!award) continue;
 
-		// Check status — skip DELETE entries
 		const txnInfo = award.transactionInformation as Record<string, unknown> | undefined;
 		const status = txnInfo?.status as Record<string, unknown> | undefined;
 		if (status && getAttr(status, "@_description") === "DELETE") continue;
 
-		// Award ID
 		const awardID = award.awardID as Record<string, unknown> | undefined;
 		const contractID = awardID?.awardContractID as Record<string, unknown> | undefined;
 		if (!contractID) continue;
@@ -84,33 +82,27 @@ export function parseFpdsAtomEntries(xml: string): FpdsContractEntry[] {
 
 		if (!piid || !modNumber || !agencyId) continue;
 
-		// Referenced IDV (optional — delivery orders have parent contract)
 		const refIDV = awardID?.referencedIDVID as Record<string, unknown> | undefined;
 		const referencedPiid = refIDV ? getText(refIDV.PIID) : undefined;
 
-		// Purchaser info
 		const purchaser = award.purchaserInformation as Record<string, unknown> | undefined;
 		const officeAgency = purchaser?.contractingOfficeAgencyID as Record<string, unknown> | undefined;
 		const agencyName = officeAgency ? (getAttr(officeAgency, "@_name") ?? "") : "";
 
-		// Vendor
 		const vendor = award.vendor as Record<string, unknown> | undefined;
 		const vendorHeader = vendor?.vendorHeader as Record<string, unknown> | undefined;
 		const vendorName = vendorHeader ? (getText(vendorHeader.vendorName) ?? "") : "";
 
-		// Dollar values
 		const dollars = award.dollarValues as Record<string, unknown> | undefined;
 		const obligatedAmount = dollars ? (getText(dollars.obligatedAmount) ?? "0") : "0";
 		const totalDollars = award.totalDollarValues as Record<string, unknown> | undefined;
 		const totalObligatedAmount = totalDollars ? (getText(totalDollars.totalObligatedAmount) ?? "0") : "0";
 
-		// Contract data
 		const contractData = award.contractData as Record<string, unknown> | undefined;
 		const description = contractData ? getText(contractData.descriptionOfContractRequirement) : undefined;
 		const actionType = contractData?.contractActionType as Record<string, unknown> | undefined;
 		const contractType = actionType ? getAttr(actionType, "@_description") : undefined;
 
-		// Product/service info
 		const psi = award.productOrServiceInformation as Record<string, unknown> | undefined;
 		const pscNode = psi?.productOrServiceCode as Record<string, unknown> | undefined;
 		const pscCode = pscNode ? getText(pscNode) : undefined;
@@ -119,17 +111,14 @@ export function parseFpdsAtomEntries(xml: string): FpdsContractEntry[] {
 		const naicsCode = naicsNode ? getText(naicsNode) : undefined;
 		const naicsDescription = naicsNode ? getAttr(naicsNode, "@_description") : undefined;
 
-		// Dates
 		const dates = award.relevantContractDates as Record<string, unknown> | undefined;
 		const signedDate = dates ? getText(dates.signedDate) : undefined;
 
-		// Place of performance
 		const pop = award.placeOfPerformance as Record<string, unknown> | undefined;
 		const principalPop = pop?.principalPlaceOfPerformance as Record<string, unknown> | undefined;
 		const stateNode = principalPop?.stateCode as Record<string, unknown> | undefined;
 		const performanceState = stateNode ? getAttr(stateNode, "@_name") : undefined;
 
-		// Competition
 		const competition = award.competition as Record<string, unknown> | undefined;
 		const extentCompeted = competition?.extentCompeted as Record<string, unknown> | undefined;
 		const competitionType = extentCompeted ? getAttr(extentCompeted, "@_description") : undefined;
@@ -193,7 +182,6 @@ export function buildFpdsSourceUrl(entry: FpdsContractEntry): string {
 	return `fpds://${ref}_${entry.agencyId}_${entry.piid}_${entry.modNumber}`;
 }
 
-
 export function formatFpdsContent(entry: FpdsContractEntry): string {
 	const lines: string[] = ["FPDS Contract Award"];
 	lines.push(`Agency: ${entry.agencyName}`);
@@ -206,52 +194,41 @@ export function formatFpdsContent(entry: FpdsContractEntry): string {
 
 	lines.push(`Obligated: $${entry.obligatedAmount} | Total: $${entry.totalObligatedAmount}`);
 
-	if (entry.contractType) {
-		lines.push(`Type: ${entry.contractType}`);
-	}
-	if (entry.naicsCode && entry.naicsDescription) {
-		lines.push(`NAICS: ${entry.naicsCode} — ${entry.naicsDescription}`);
-	}
-	if (entry.pscCode && entry.pscDescription) {
-		lines.push(`PSC: ${entry.pscCode} — ${entry.pscDescription}`);
-	}
-	if (entry.description) {
-		lines.push(`Description: ${entry.description}`);
-	}
-	if (entry.performanceState) {
-		lines.push(`Performance: ${entry.performanceState}`);
-	}
-	if (entry.competitionType) {
-		lines.push(`Competition: ${entry.competitionType}`);
-	}
-	if (entry.signedDate) {
-		lines.push(`Signed: ${entry.signedDate}`);
-	}
+	if (entry.contractType) lines.push(`Type: ${entry.contractType}`);
+	if (entry.naicsCode && entry.naicsDescription) lines.push(`NAICS: ${entry.naicsCode} — ${entry.naicsDescription}`);
+	if (entry.pscCode && entry.pscDescription) lines.push(`PSC: ${entry.pscCode} — ${entry.pscDescription}`);
+	if (entry.description) lines.push(`Description: ${entry.description}`);
+	if (entry.performanceState) lines.push(`Performance: ${entry.performanceState}`);
+	if (entry.competitionType) lines.push(`Competition: ${entry.competitionType}`);
+	if (entry.signedDate) lines.push(`Signed: ${entry.signedDate}`);
 
 	return lines.join("\n");
 }
 
-function buildSourceMetadata(entry: FpdsContractEntry): FpdsContractMetadata {
-	return {
+function buildSourceMetadata(entry: FpdsContractEntry): Record<string, string> {
+	const meta: Record<string, string> = {
 		sourceType: "fpds",
 		piid: entry.piid,
 		modNumber: entry.modNumber,
-		referencedPiid: entry.referencedPiid,
 		agencyId: entry.agencyId,
 		agencyName: entry.agencyName,
 		vendorName: entry.vendorName,
-		description: entry.description,
 		obligatedAmount: entry.obligatedAmount,
 		totalObligatedAmount: entry.totalObligatedAmount,
-		naicsCode: entry.naicsCode,
-		naicsDescription: entry.naicsDescription,
-		pscCode: entry.pscCode,
-		pscDescription: entry.pscDescription,
-		signedDate: entry.signedDate,
-		performanceState: entry.performanceState,
-		contractType: entry.contractType,
-		competitionType: entry.competitionType,
 	};
+
+	if (entry.referencedPiid) meta.referencedPiid = entry.referencedPiid;
+	if (entry.description) meta.description = entry.description;
+	if (entry.naicsCode) meta.naicsCode = entry.naicsCode;
+	if (entry.naicsDescription) meta.naicsDescription = entry.naicsDescription;
+	if (entry.pscCode) meta.pscCode = entry.pscCode;
+	if (entry.pscDescription) meta.pscDescription = entry.pscDescription;
+	if (entry.signedDate) meta.signedDate = entry.signedDate;
+	if (entry.performanceState) meta.performanceState = entry.performanceState;
+	if (entry.contractType) meta.contractType = entry.contractType;
+	if (entry.competitionType) meta.competitionType = entry.competitionType;
+
+	return meta;
 }
 
 export function entriesToSignals(entries: FpdsContractEntry[]): SignalAnalysisInput[] {

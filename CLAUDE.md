@@ -151,6 +151,8 @@ Discovered entities are enriched asynchronously via cron:
 3. **Extract** — `DossierExtractor` uses AI to extract structured dossier data (name, title, org, branch, programs, education, career history)
 4. **Store** — Enriched data is saved to the stakeholders table; entity status updated to `enriched`
 
+**USAspending.gov enrichment (planned):** Once a stakeholder is identified, query USAspending.gov API (no auth) to enrich their dossier with: award history for their agency/program, spending trends, which primes and subs operate in their space, and funding trajectory. USAspending is an enrichment source only — NOT a signal source (it consumes FPDS data with a lag). FPDS ATOM feed is the authoritative signal source for contract awards.
+
 ### Cron Scheduling
 Cloudflare Workers cron trigger fires hourly (`0 * * * *`). The `scheduler` cycles through 6 jobs round-robin: `fpds`, `rss`, `sam_gov`, `sam_gov_apbi`, `enrichment`, `enrichFailed`. Jobs can also be triggered on-demand via `POST /cron/:jobName`.
 
@@ -196,7 +198,22 @@ Run `npm install` from the monorepo root to link workspaces.
 - Domain types: always define as Zod schema first, then export inferred type.
 - Env bindings typed in `worker-configuration.d.ts`.
 
+## Critical Constraint: .mil/.gov Bot Detection
+
+Most .mil and .gov sites (army.mil, navy.mil, af.mil, disa.mil, marines.mil, etc.) block non-browser HTTP requests with 403 Forbidden. **Direct HTML scraping of these sites is not viable and must never be attempted.**
+
+Viable ingestion methods (in priority order):
+1. **Structured APIs** — FPDS ATOM feed for contract awards (already built, primary signal source), SAM.gov (free key) for opportunities. USAspending.gov (no auth) is used for stakeholder dossier enrichment only, NOT as a signal source.
+2. **RSS feeds** — defense.gov contracts, trade press (Defense One, Breaking Defense, Fed News Network, GovConWire, FedScoop — already built)
+3. **Google News RSS as .mil proxy** — `news.google.com/rss/search?q=site:army.mil+keyword` returns headlines from .mil content Google has already crawled. This is the primary workaround for branch-specific news.
+4. **Google Alerts RSS** — keyword monitoring (software factory, Platform One, IL5, IL6, STIG, DevSecOps, APFIT, Advana, Game Warden) scoped to .mil/.gov
+5. **Competitor/vendor press pages** — commercial sites (ECS, Booz Allen, SAIC, etc.) usually don't block bots
+6. **Direct PDF downloads** — budget docs, STIG guides, strategy papers often work as direct URL fetches
+
+When adding new ingestion sources, always verify access method works before building. Never write fetchers that hit .mil/.gov HTML pages directly.
+
 ## What's NOT Built Yet
+- **Google News RSS proxy** — .mil/.gov content via Google News site-scoped queries (highest priority next source)
 - **Email sending** — Resend integration for accepted drafts
 - **Production CORS origins** — needs real Pages domain added
 - **Authentication** — no auth layer yet

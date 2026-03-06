@@ -1,6 +1,6 @@
 import { contentJson, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { CRON_JOBS } from "../../cron/scheduler";
+import { CRON_JOBS, runCronJob } from "../../cron/scheduler";
 import type { AppContext } from "../../types";
 
 export class CronTrigger extends OpenAPIRoute {
@@ -60,7 +60,7 @@ export class CronTrigger extends OpenAPIRoute {
 		}
 
 		try {
-			const output = await job.run(c.env);
+			const output = await runCronJob(job, c.env);
 			return { success: true, result: { jobName, output } };
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Job execution failed";

@@ -1,4 +1,3 @@
-import type { FetchFn } from "../types";
 import type { SamGovOpportunity } from "./sam-gov-parser";
 import { parseSamGovResponse } from "./sam-gov-parser";
 import type { Logger } from "../../logger";
@@ -65,7 +64,7 @@ export function buildApbiUrl(apiKey: string, offset: number = 0): string {
 type UrlBuilder = (apiKey: string, offset: number) => string;
 
 async function fetchPaginated(
-	fetcher: FetchFn,
+	fetcher: typeof fetch,
 	apiKey: string,
 	logger: Logger,
 	urlBuilder: UrlBuilder,
@@ -102,7 +101,7 @@ async function fetchPaginated(
 }
 
 export async function fetchSamGovOpportunities(
-	fetcher: FetchFn,
+	fetcher: typeof fetch,
 	apiKey: string,
 	logger: Logger,
 ): Promise<SamGovOpportunity[]> {
@@ -110,7 +109,7 @@ export async function fetchSamGovOpportunities(
 }
 
 export async function fetchApbiEvents(
-	fetcher: FetchFn,
+	fetcher: typeof fetch,
 	apiKey: string,
 	logger: Logger,
 ): Promise<SamGovOpportunity[]> {

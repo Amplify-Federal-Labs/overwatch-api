@@ -1,8 +1,6 @@
 import { contentJson, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { InteractionSchema } from "../../schemas";
-import { initialInteractions } from "../../data/mock-competitors";
-import type { AppContext } from "../../types";
 
 export class InteractionList extends OpenAPIRoute {
 	schema = {
@@ -20,7 +18,7 @@ export class InteractionList extends OpenAPIRoute {
 		},
 	};
 
-	async handle(_c: AppContext) {
-		return { success: true, result: initialInteractions };
+	async handle() {
+		return { success: true, result: {} };
 	}
 }
