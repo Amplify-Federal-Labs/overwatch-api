@@ -3,8 +3,8 @@ import { parseSamGovResponse } from "./sam-gov-parser";
 import type { Logger } from "../../logger";
 
 const PAGE_LIMIT = 100;
-const MAX_PAGES = 5;
-const LOOKBACK_DAYS = 3;
+const MAX_PAGES = 2;
+const LOOKBACK_DAYS = 1;
 
 const PROCUREMENT_TYPES = "o,r,p,k";
 const SPECIAL_NOTICE_TYPE = "s";

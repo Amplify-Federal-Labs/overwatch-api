@@ -112,14 +112,13 @@ export class ObservationExtractorAgent extends Agent<Env, AgentState> {
 		switch (sourceType) {
 			case "rss":
 				return this.fetchAllRssFeeds(logger);
-			case "sam_gov":
-				return opportunitiesToSignals(
-					await fetchSamGovOpportunities(fetch, this.env.SAM_GOV_API_KEY, logger),
-				);
-			case "sam_gov_apbi":
-				return opportunitiesToSignals(
-					await fetchApbiEvents(fetch, this.env.SAM_GOV_API_KEY, logger),
-				);
+			case "sam_gov": {
+				const [opps, apbi] = await Promise.all([
+					fetchSamGovOpportunities(fetch, this.env.SAM_GOV_API_KEY, logger),
+					fetchApbiEvents(fetch, this.env.SAM_GOV_API_KEY, logger),
+				]);
+				return opportunitiesToSignals([...opps, ...apbi]);
+			}
 			case "fpds":
 				return entriesToSignals(
 					await fetchFpdsContracts(fetch, logger),

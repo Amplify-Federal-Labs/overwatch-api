@@ -274,8 +274,8 @@ describe("fetchSamGovOpportunities", () => {
 
 		const opps = await fetchSamGovOpportunities(mockFetch, "test-key", logger);
 
-		expect(mockFetch.mock.calls.length).toBeLessThanOrEqual(5);
-		expect(opps).toHaveLength(500);
+		expect(mockFetch.mock.calls.length).toBeLessThanOrEqual(2);
+		expect(opps).toHaveLength(200);
 	});
 });
 

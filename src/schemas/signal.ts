@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const SignalSourceTypeEnum = z.enum([
 	"sam_gov",
-	"sam_gov_apbi",
 	"rss",
 	"mil_announcement",
 	"fpds",

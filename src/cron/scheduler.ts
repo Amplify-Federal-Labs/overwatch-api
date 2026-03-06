@@ -25,7 +25,6 @@ export type CronJob = IngestionJob | ResolutionJob | SynthesisJob;
 export const CRON_JOBS: readonly CronJob[] = [
 	{ name: "rss", kind: "ingestion", sourceType: "rss" },
 	{ name: "sam_gov", kind: "ingestion", sourceType: "sam_gov" },
-	{ name: "sam_gov_apbi", kind: "ingestion", sourceType: "sam_gov_apbi" },
 	{ name: "fpds", kind: "ingestion", sourceType: "fpds" },
 	{ name: "entity_resolution", kind: "resolution" },
 	{ name: "synthesis", kind: "synthesis" },
