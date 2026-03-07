@@ -95,7 +95,7 @@ export class SynthesisRepository {
 		return result?.count ?? 0;
 	}
 
-	async findProfilesNeedingSynthesis(limit = 10): Promise<ProfileForSynthesis[]> {
+	async findProfilesNeedingSynthesis(limit = 25): Promise<ProfileForSynthesis[]> {
 		// Profiles that: have observations AND (never synthesized OR have new observations since last synthesis)
 		const profiles = await this.db
 			.select({

@@ -201,6 +201,34 @@ export class EntityProfileRepository {
 
 	async findProfilesWithSignalIds() {
 		const profiles = await this.db.select().from(entityProfiles).all();
+		return this.attachSignalIds(profiles);
+	}
+
+	async findProfilesWithSignalIdsPaginated(
+		types: string[],
+		limit: number,
+		offset: number,
+	) {
+		const profiles = await this.db
+			.select()
+			.from(entityProfiles)
+			.where(sql`${entityProfiles.type} IN (${sql.join(types.map((t) => sql`${t}`), sql`, `)})`)
+			.limit(limit)
+			.offset(offset)
+			.all();
+		return this.attachSignalIds(profiles);
+	}
+
+	async countProfilesByTypes(types: string[]): Promise<number> {
+		const result = await this.db
+			.select({ count: sql<number>`count(*)` })
+			.from(entityProfiles)
+			.where(sql`${entityProfiles.type} IN (${sql.join(types.map((t) => sql`${t}`), sql`, `)})`)
+			.get();
+		return result?.count ?? 0;
+	}
+
+	private async attachSignalIds(profiles: (typeof entityProfiles.$inferSelect)[]) {
 		const result = [];
 		for (const profile of profiles) {
 			const refs = await this.db
