@@ -139,6 +139,16 @@ export class ObservationRepository {
 			.all();
 	}
 
+	async findSignalsPaginated(limit: number, offset: number) {
+		return this.db
+			.select()
+			.from(signals)
+			.orderBy(desc(signals.createdAt))
+			.limit(limit)
+			.offset(offset)
+			.all();
+	}
+
 	async findObservationsBySignalId(signalId: string) {
 		const obs = await this.db
 			.select()
@@ -211,6 +221,16 @@ export class ObservationRepository {
 		const allSignals = await this.findAllSignals();
 		const result = [];
 		for (const signal of allSignals) {
+			const obs = await this.findObservationsBySignalId(signal.id);
+			result.push({ ...signal, observations: obs });
+		}
+		return result;
+	}
+
+	async findSignalsWithObservationsPaginated(limit: number, offset: number) {
+		const paginatedSignals = await this.findSignalsPaginated(limit, offset);
+		const result = [];
+		for (const signal of paginatedSignals) {
 			const obs = await this.findObservationsBySignalId(signal.id);
 			result.push({ ...signal, observations: obs });
 		}
