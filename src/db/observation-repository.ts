@@ -131,6 +131,15 @@ export class ObservationRepository {
 		return result?.count ?? 0;
 	}
 
+	async countCompanyObservations(): Promise<number> {
+		const result = await this.db
+			.select({ count: sql<number>`count(DISTINCT ${observationEntities.observationId})` })
+			.from(observationEntities)
+			.where(eq(observationEntities.entityType, "company"))
+			.get();
+		return result?.count ?? 0;
+	}
+
 	async findAllSignals() {
 		return this.db
 			.select()

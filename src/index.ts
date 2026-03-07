@@ -8,6 +8,7 @@ import { stakeholdersRouter } from "./endpoints/stakeholders/router";
 import { competitorsRouter } from "./endpoints/competitors/router";
 import { interactionsRouter } from "./endpoints/interactions/router";
 import { draftsRouter } from "./endpoints/drafts/router";
+import { countsRouter } from "./endpoints/counts/router";
 import { cronRouter } from "./endpoints/cron/router";
 import { getScheduledJob, runCronJob } from "./cron/scheduler";
 import { Logger } from "./logger";
@@ -70,6 +71,7 @@ openapi.route("/stakeholders", stakeholdersRouter);
 openapi.route("/competitors", competitorsRouter);
 openapi.route("/interactions", interactionsRouter);
 openapi.route("/drafts", draftsRouter);
+openapi.route("/counts", countsRouter);
 openapi.route("/cron", cronRouter);
 
 // Named export for testing (Hono's app.request() method)
