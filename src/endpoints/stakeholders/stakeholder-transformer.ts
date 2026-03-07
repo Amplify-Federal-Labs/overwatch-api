@@ -1,4 +1,4 @@
-import type { Stakeholder, StakeholderType } from "../../schemas";
+import type { Stakeholder, StakeholderType, Dossier } from "../../schemas";
 
 export interface EntityProfileWithDetails {
 	id: string;
@@ -9,6 +9,7 @@ export interface EntityProfileWithDetails {
 	trajectory: string | null;
 	relevanceScore: number | null;
 	signalIds: string[];
+	dossier?: Dossier | null;
 }
 
 function confidenceFromObservationCount(count: number): "high" | "medium" | "low" {
@@ -19,18 +20,39 @@ function confidenceFromObservationCount(count: number): "high" | "medium" | "low
 
 export function transformEntityToStakeholder(profile: EntityProfileWithDetails): Stakeholder {
 	const stakeholderType: StakeholderType = profile.type === "person" ? "person" : "agency";
+	const dossier = profile.dossier ?? null;
+
+	const title = dossier?.kind === "person" ? dossier.title : "";
+	const org = dossier?.kind === "person" ? dossier.org : "";
+	const branch = dossier ? dossier.branch : "";
+	const programs = dossier ? dossier.programs : [];
+
+	const militaryBio = dossier?.kind === "person" && dossier.rank
+		? {
+			rank: dossier.rank,
+			rankAbbrev: dossier.rank,
+			branch: dossier.branch,
+			commissionYear: 0,
+			education: dossier.education,
+			careerHistory: dossier.careerHistory,
+			focusAreas: dossier.focusAreas,
+			decorations: dossier.decorations,
+			bioSourceUrl: dossier.bioSourceUrl ?? "",
+			bioRetrievedDate: "",
+		}
+		: undefined;
 
 	return {
 		id: profile.id,
 		type: stakeholderType,
 		name: profile.canonicalName,
-		title: "",
-		org: "",
-		branch: "",
+		title,
+		org,
+		branch,
 		stage: "unknown",
 		confidence: confidenceFromObservationCount(profile.observationCount),
 		contact: { email: "", phone: "", address: "" },
-		programs: [],
+		programs,
 		awards: [],
 		social: { linkedin: null, twitter: null },
 		events: [],
@@ -43,5 +65,6 @@ export function transformEntityToStakeholder(profile: EntityProfileWithDetails):
 		},
 		signals: profile.signalIds,
 		notes: profile.summary ?? "",
+		militaryBio,
 	};
 }

@@ -7,13 +7,14 @@ vi.mock("agents", () => ({
 import { getScheduledJob, CRON_JOBS } from "./scheduler";
 
 describe("CRON_JOBS", () => {
-	it("has five jobs in order: rss, sam_gov, fpds, entity_resolution, synthesis", () => {
-		expect(CRON_JOBS).toHaveLength(5);
+	it("has six jobs in order: rss, sam_gov, fpds, entity_resolution, synthesis, enrichment", () => {
+		expect(CRON_JOBS).toHaveLength(6);
 		expect(CRON_JOBS[0].name).toBe("rss");
 		expect(CRON_JOBS[1].name).toBe("sam_gov");
 		expect(CRON_JOBS[2].name).toBe("fpds");
 		expect(CRON_JOBS[3].name).toBe("entity_resolution");
 		expect(CRON_JOBS[4].name).toBe("synthesis");
+		expect(CRON_JOBS[5].name).toBe("enrichment");
 	});
 
 	it("ingestion jobs have sourceType matching name", () => {
@@ -40,6 +41,12 @@ describe("CRON_JOBS", () => {
 		expect(job).toBeDefined();
 		expect(job!.kind).toBe("synthesis");
 	});
+
+	it("enrichment job has kind enrichment", () => {
+		const job = CRON_JOBS.find((j) => j.name === "enrichment");
+		expect(job).toBeDefined();
+		expect(job!.kind).toBe("enrichment");
+	});
 });
 
 describe("getScheduledJob", () => {
@@ -63,14 +70,18 @@ describe("getScheduledJob", () => {
 		expect(getScheduledJob(4).name).toBe("synthesis");
 	});
 
-	it("cycles back to rss at hour 5", () => {
-		expect(getScheduledJob(5).name).toBe("rss");
+	it("returns enrichment at hour 5", () => {
+		expect(getScheduledJob(5).name).toBe("enrichment");
+	});
+
+	it("cycles back to rss at hour 6", () => {
+		expect(getScheduledJob(6).name).toBe("rss");
 	});
 
 	it("cycles through all 24 hours correctly", () => {
-		const expected = ["rss", "sam_gov", "fpds", "entity_resolution", "synthesis"];
+		const expected = ["rss", "sam_gov", "fpds", "entity_resolution", "synthesis", "enrichment"];
 		for (let hour = 0; hour < 24; hour++) {
-			expect(getScheduledJob(hour).name).toBe(expected[hour % 5]);
+			expect(getScheduledJob(hour).name).toBe(expected[hour % 6]);
 		}
 	});
 });

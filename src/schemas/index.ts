@@ -98,3 +98,13 @@ export {
 	type SignalType,
 	type SignalView,
 } from "./signal-view";
+export {
+	PersonDossierSchema,
+	AgencyDossierSchema,
+	DossierSchema,
+	EnrichmentStatusEnum,
+	type PersonDossier,
+	type AgencyDossier,
+	type Dossier,
+	type EnrichmentStatus,
+} from "./dossier";

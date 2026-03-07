@@ -31,6 +31,9 @@ export function buildEntityProfileRow(type: string, canonicalName: string) {
 		trajectory: null,
 		relevanceScore: null,
 		lastSynthesizedAt: null,
+		dossier: null,
+		enrichmentStatus: "pending",
+		lastEnrichedAt: null,
 		createdAt: now,
 	};
 }
@@ -246,6 +249,7 @@ export class EntityProfileRepository {
 				summary: profile.summary,
 				trajectory: profile.trajectory,
 				relevanceScore: profile.relevanceScore,
+				dossier: profile.dossier,
 				signalIds,
 			});
 		}

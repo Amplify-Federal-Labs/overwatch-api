@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import type { Dossier } from "../schemas/dossier";
 
 // Signals: simplified, just raw content + source metadata
 export const signals = sqliteTable("signals", {
@@ -46,6 +47,9 @@ export const entityProfiles = sqliteTable("entity_profiles", {
 	trajectory: text("trajectory"),
 	relevanceScore: integer("relevance_score"),
 	lastSynthesizedAt: text("last_synthesized_at"),
+	dossier: text("dossier", { mode: "json" }).$type<Dossier>(),
+	enrichmentStatus: text("enrichment_status").notNull().default("pending"),
+	lastEnrichedAt: text("last_enriched_at"),
 	createdAt: text("created_at").notNull(),
 });
 

@@ -82,6 +82,9 @@ export class EntityResolverAgent extends Agent<Env, AgentState> {
 						trajectory: null,
 						relevanceScore: null,
 						lastSynthesizedAt: null,
+						dossier: null,
+						enrichmentStatus: "pending",
+						lastEnrichedAt: null,
 						createdAt: new Date().toISOString(),
 					});
 				}

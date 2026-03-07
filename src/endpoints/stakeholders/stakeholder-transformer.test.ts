@@ -80,4 +80,79 @@ describe("transformEntityToStakeholder", () => {
 		const noSummary = transformEntityToStakeholder({ ...PERSON_PROFILE, summary: null });
 		expect(noSummary.notes).toBe("");
 	});
+
+	it("populates fields from person dossier", () => {
+		const profile: EntityProfileWithDetails = {
+			...PERSON_PROFILE,
+			dossier: {
+				kind: "person",
+				title: "Chief Technology Officer",
+				org: "DISA",
+				branch: "DoD",
+				programs: ["Platform One", "Iron Bank"],
+				rank: "Colonel",
+				education: ["MIT BS Computer Science"],
+				careerHistory: [{ role: "CTO", org: "DISA", years: "2023-present" }],
+				focusAreas: ["DevSecOps", "Cloud"],
+				decorations: ["Legion of Merit"],
+				bioSourceUrl: "https://example.com/bio",
+			},
+		};
+
+		const result = transformEntityToStakeholder(profile);
+
+		expect(result.title).toBe("Chief Technology Officer");
+		expect(result.org).toBe("DISA");
+		expect(result.branch).toBe("DoD");
+		expect(result.programs).toEqual(["Platform One", "Iron Bank"]);
+		expect(result.militaryBio).toBeDefined();
+		expect(result.militaryBio!.rank).toBe("Colonel");
+		expect(result.militaryBio!.education).toEqual(["MIT BS Computer Science"]);
+		expect(result.militaryBio!.focusAreas).toEqual(["DevSecOps", "Cloud"]);
+	});
+
+	it("populates branch and programs from agency dossier", () => {
+		const profile: EntityProfileWithDetails = {
+			...AGENCY_PROFILE,
+			dossier: {
+				kind: "agency",
+				mission: "Provides IT and communications support to DoD",
+				branch: "Navy",
+				programs: ["MilCloud", "JRSS"],
+				parentOrg: "Department of Defense",
+				leadership: ["RADM John Smith"],
+				focusAreas: ["Cybersecurity"],
+			},
+		};
+
+		const result = transformEntityToStakeholder(profile);
+
+		expect(result.title).toBe("");
+		expect(result.org).toBe("");
+		expect(result.branch).toBe("Navy");
+		expect(result.programs).toEqual(["MilCloud", "JRSS"]);
+		expect(result.militaryBio).toBeUndefined();
+	});
+
+	it("does not include militaryBio when person has no rank", () => {
+		const profile: EntityProfileWithDetails = {
+			...PERSON_PROFILE,
+			dossier: {
+				kind: "person",
+				title: "Director",
+				org: "NSA",
+				branch: "IC",
+				programs: [],
+				education: [],
+				careerHistory: [],
+				focusAreas: [],
+				decorations: [],
+			},
+		};
+
+		const result = transformEntityToStakeholder(profile);
+
+		expect(result.title).toBe("Director");
+		expect(result.militaryBio).toBeUndefined();
+	});
 });
