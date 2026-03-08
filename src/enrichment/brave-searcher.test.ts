@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { BraveSearcher, buildSearchQuery, type SearchResult } from "./brave-searcher";
+import type { EnrichmentContext } from "../db/enrichment-repository";
 
 describe("buildSearchQuery", () => {
 	it("builds query for a person entity", () => {
@@ -15,6 +16,42 @@ describe("buildSearchQuery", () => {
 	it("builds query for other entity types", () => {
 		const query = buildSearchQuery("Palantir", "company");
 		expect(query).toBe("Palantir");
+	});
+
+	it("builds contextual query for person with co-occurring agency", () => {
+		const context: EnrichmentContext = {
+			coOccurringEntities: [{ canonicalName: "Department of the Army", type: "agency" }],
+			observationTypes: ["solicitation"],
+		};
+		const query = buildSearchQuery("Michael T. Geegan", "person", context);
+		expect(query).toBe('"Michael T. Geegan" "Department of the Army"');
+	});
+
+	it("builds contextual query for person with observation type but no agency", () => {
+		const context: EnrichmentContext = {
+			coOccurringEntities: [{ canonicalName: "F-35", type: "program" }],
+			observationTypes: ["solicitation"],
+		};
+		const query = buildSearchQuery("Michael T. Geegan", "person", context);
+		expect(query).toBe('"Michael T. Geegan" solicitation government');
+	});
+
+	it("builds contextual query for agency with observation type", () => {
+		const context: EnrichmentContext = {
+			coOccurringEntities: [{ canonicalName: "Lockheed Martin", type: "company" }],
+			observationTypes: ["contract_award"],
+		};
+		const query = buildSearchQuery("NIWC Pacific", "agency", context);
+		expect(query).toBe('"NIWC Pacific" contract_award government');
+	});
+
+	it("falls back to default query when context has no useful data", () => {
+		const context: EnrichmentContext = {
+			coOccurringEntities: [],
+			observationTypes: [],
+		};
+		const query = buildSearchQuery("John Smith", "person", context);
+		expect(query).toBe("John Smith defense government official");
 	});
 });
 

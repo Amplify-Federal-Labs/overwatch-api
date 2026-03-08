@@ -4,6 +4,7 @@ import { KpiSchema } from "../../schemas";
 import { ObservationRepository } from "../../db/observation-repository";
 import { EntityProfileRepository } from "../../db/entity-profile-repository";
 import { SynthesisRepository } from "../../db/synthesis-repository";
+import { SignalRepository } from "../../db/signal-repository";
 import { buildKpis } from "./kpi-builder";
 import type { AppContext } from "../../types";
 
@@ -26,14 +27,15 @@ export class KpiList extends OpenAPIRoute {
 	};
 
 	async handle(c: AppContext) {
+		const signalRepo = new SignalRepository(c.env.DB);
 		const obsRepo = new ObservationRepository(c.env.DB);
 		const entityRepo = new EntityProfileRepository(c.env.DB);
 		const synthRepo = new SynthesisRepository(c.env.DB);
 
 		const [totalSignals, totalObservations, recentSignals, recentObservations, totalEntityProfiles, totalInsights] = await Promise.all([
-			obsRepo.countIngestedItems(),
+			signalRepo.count(),
 			obsRepo.countObservations(),
-			obsRepo.countRecentIngestedItems(RECENT_DAYS),
+			signalRepo.countRecent(RECENT_DAYS),
 			obsRepo.countRecentObservations(RECENT_DAYS),
 			entityRepo.countProfiles(),
 			synthRepo.countInsights(),

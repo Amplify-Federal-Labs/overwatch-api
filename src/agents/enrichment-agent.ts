@@ -34,8 +34,13 @@ export class EnrichmentAgent extends Agent<Env, AgentState> {
 
 		logger.info("EnrichmentAgent received profile IDs", { count: profileIds.length });
 
-		// Fetch full profile data for the given IDs
+		// Fetch full profile data and observation context for the given IDs
 		const profiles = await repo.findProfilesByIds(profileIds);
+		const contextMap = await repo.findContextForProfiles(profileIds);
+		const profilesWithContext = profiles.map((p) => ({
+			...p,
+			context: contextMap.get(p.id),
+		}));
 
 		const boundFetch = (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init);
 		const searcher = new BraveSearcher(this.env.BRAVE_SEARCH_API_KEY, boundFetch, logger);
@@ -43,7 +48,7 @@ export class EnrichmentAgent extends Agent<Env, AgentState> {
 		const dossierExtractor = new DossierExtractor(this.env);
 
 		const enricher = new EntityEnricher({
-			search: (name, type) => searcher.search(name, type),
+			search: (name, type, ctx) => searcher.search(name, type, undefined, ctx),
 			fetchPages: (urls) => pageFetcher.fetchPages(urls),
 			extractDossier: (name, type, pages) => dossierExtractor.extract(name, type, pages),
 			saveDossier: (id, dossier) => repo.updateDossier(id, dossier),
@@ -52,7 +57,7 @@ export class EnrichmentAgent extends Agent<Env, AgentState> {
 			logger,
 		});
 
-		const result = await enricher.run(profiles);
+		const result = await enricher.run(profilesWithContext);
 
 		this.setState({ lastRun: new Date().toISOString(), lastResult: result });
 

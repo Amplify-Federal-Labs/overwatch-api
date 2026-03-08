@@ -171,10 +171,15 @@ export function formatSamGovContent(opp: SamGovOpportunity): string {
 	}
 	for (const contact of opp.pointOfContact) {
 		if (contact.fullName) {
-			const titlePart = contact.title ? ` (${contact.title})` : "";
-			const emailPart = contact.email ? ` — ${contact.email}` : "";
-			lines.push(`Contact: ${contact.fullName}${titlePart}${emailPart}`);
+			const parts = [contact.fullName];
+			if (contact.title) parts.push(`(${contact.title})`);
+			if (contact.email) parts.push(`— ${contact.email}`);
+			if (contact.phone) parts.push(`| ${contact.phone}`);
+			lines.push(`Contact: ${parts.join(" ")}`);
 		}
+	}
+	if (opp.description && !opp.description.startsWith("https://")) {
+		lines.push(`Description: ${opp.description}`);
 	}
 	if (opp.award) {
 		if (opp.award.amount && opp.award.awardee?.name) {
@@ -193,6 +198,45 @@ export function buildSamGovSourceUrl(opp: SamGovOpportunity): string {
 	return opp.uiLink ?? `sam://${opp.noticeId}`;
 }
 
+export function buildSourceMetadata(opp: SamGovOpportunity): Record<string, string> {
+	const meta: Record<string, string> = {};
+
+	if (opp.organizationName) meta.agency = opp.organizationName;
+	if (opp.solicitationNumber) meta.solicitationNumber = opp.solicitationNumber;
+	if (opp.naicsCode) meta.naicsCode = opp.naicsCode;
+	if (opp.classificationCode) meta.classificationCode = opp.classificationCode;
+	if (opp.typeOfSetAsideDescription) {
+		meta.setAside = opp.typeOfSetAsideDescription;
+	} else if (opp.typeOfSetAside) {
+		meta.setAside = opp.typeOfSetAside;
+	}
+	if (opp.responseDeadLine) meta.responseDeadline = opp.responseDeadLine;
+
+	const primaryContact = opp.pointOfContact[0];
+	if (primaryContact) {
+		if (primaryContact.fullName) meta.contactName = primaryContact.fullName;
+		if (primaryContact.title) meta.contactTitle = primaryContact.title;
+		if (primaryContact.email) meta.contactEmail = primaryContact.email;
+		if (primaryContact.phone) meta.contactPhone = primaryContact.phone;
+	}
+
+	if (opp.placeOfPerformance) {
+		const parts: string[] = [];
+		if (opp.placeOfPerformance.city?.name) parts.push(opp.placeOfPerformance.city.name);
+		if (opp.placeOfPerformance.state?.name) parts.push(opp.placeOfPerformance.state.name);
+		if (opp.placeOfPerformance.zip) parts.push(opp.placeOfPerformance.zip);
+		if (parts.length > 0) meta.location = parts.join(", ");
+	}
+
+	if (opp.award) {
+		if (opp.award.amount) meta.awardAmount = opp.award.amount;
+		if (opp.award.date) meta.awardDate = opp.award.date;
+		if (opp.award.awardee?.name) meta.awardee = opp.award.awardee.name;
+	}
+
+	return meta;
+}
+
 export function opportunitiesToSignals(opps: SamGovOpportunity[]): SignalAnalysisInput[] {
 	return opps.map((opp) => ({
 		content: formatSamGovContent(opp),
@@ -200,5 +244,6 @@ export function opportunitiesToSignals(opps: SamGovOpportunity[]): SignalAnalysi
 		sourceName: "SAM.gov",
 		sourceLink: `sam://${opp.noticeId}`,
 		sourceUrl: opp.uiLink,
+		sourceMetadata: buildSourceMetadata(opp),
 	}));
 }

@@ -202,6 +202,37 @@ export class EntityProfileRepository {
 			.run();
 	}
 
+	async resolveGroupBatch(
+		entityIds: number[],
+		profileId: string,
+		addAlias: boolean,
+		aliasName: string,
+	): Promise<void> {
+		const now = new Date().toISOString();
+
+		const resolveQueries = entityIds.map((id) =>
+			this.db
+				.update(observationEntities)
+				.set({ entityProfileId: profileId, resolvedAt: now })
+				.where(eq(observationEntities.id, id)),
+		);
+
+		const aliasQueries = addAlias
+			? [this.db.insert(entityAliases).values(buildEntityAliasRow(profileId, aliasName)).onConflictDoNothing()]
+			: [];
+
+		// Stats update: we can't do the COUNT inside a batch, so we update after
+		// D1 batch executes all statements atomically
+		const queries = [...resolveQueries, ...aliasQueries];
+
+		if (queries.length > 0) {
+			await this.db.batch(queries as [typeof queries[0], ...typeof queries]);
+		}
+
+		// Update stats after the batch (needs a read then write)
+		await this.updateProfileStats(profileId);
+	}
+
 	async findProfilesWithSignalIds() {
 		const profiles = await this.db.select().from(entityProfiles).all();
 		return this.attachSignalIds(profiles);

@@ -4,7 +4,7 @@ vi.mock("agents", () => ({
 	getAgentByName: vi.fn(),
 }));
 
-import { getScheduledJob, CRON_SCHEDULE } from "./scheduler";
+import { getScheduledJob, findJobByName, CRON_SCHEDULE, ON_DEMAND_JOBS } from "./scheduler";
 
 describe("CRON_SCHEDULE", () => {
 	it("has three ingestion jobs at hours 0, 1, 2", () => {
@@ -52,5 +52,33 @@ describe("getScheduledJob", () => {
 		expect(getScheduledJob(3)).toBeNull();
 		expect(getScheduledJob(12)).toBeNull();
 		expect(getScheduledJob(23)).toBeNull();
+	});
+});
+
+describe("ON_DEMAND_JOBS", () => {
+	it("has three agent jobs", () => {
+		expect(ON_DEMAND_JOBS.size).toBe(3);
+		expect(ON_DEMAND_JOBS.get("entity_resolution")).toEqual({ name: "entity_resolution", kind: "agent", agentName: "entity_resolution" });
+		expect(ON_DEMAND_JOBS.get("synthesis")).toEqual({ name: "synthesis", kind: "agent", agentName: "synthesis" });
+		expect(ON_DEMAND_JOBS.get("signal_materialization")).toEqual({ name: "signal_materialization", kind: "agent", agentName: "signal_materialization" });
+	});
+});
+
+describe("findJobByName", () => {
+	it("finds cron schedule jobs by name", () => {
+		expect(findJobByName("rss")).toEqual({ name: "rss", kind: "ingestion", sourceType: "rss" });
+		expect(findJobByName("sam_gov")).toEqual({ name: "sam_gov", kind: "ingestion", sourceType: "sam_gov" });
+		expect(findJobByName("fpds")).toEqual({ name: "fpds", kind: "ingestion", sourceType: "fpds" });
+	});
+
+	it("finds on-demand agent jobs by name", () => {
+		expect(findJobByName("entity_resolution")?.kind).toBe("agent");
+		expect(findJobByName("synthesis")?.kind).toBe("agent");
+		expect(findJobByName("signal_materialization")?.kind).toBe("agent");
+	});
+
+	it("returns null for unknown job names", () => {
+		expect(findJobByName("unknown")).toBeNull();
+		expect(findJobByName("enrichment")).toBeNull();
 	});
 });

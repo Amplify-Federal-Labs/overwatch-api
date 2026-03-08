@@ -2,6 +2,7 @@ import { contentJson, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { ObservationRepository } from "../../db/observation-repository";
 import { EntityProfileRepository } from "../../db/entity-profile-repository";
+import { SignalRepository } from "../../db/signal-repository";
 import { buildCounts } from "./counts-builder";
 import type { AppContext } from "../../types";
 
@@ -32,11 +33,12 @@ export class CountsList extends OpenAPIRoute {
 	};
 
 	async handle(c: AppContext) {
-		const obsRepo = new ObservationRepository(c.env.DB);
+		const signalRepo = new SignalRepository(c.env.DB);
 		const entityRepo = new EntityProfileRepository(c.env.DB);
+		const obsRepo = new ObservationRepository(c.env.DB);
 
 		const [signals, stakeholders, competitors] = await Promise.all([
-			obsRepo.countIngestedItems(),
+			signalRepo.count(),
 			entityRepo.countProfilesByTypes(STAKEHOLDER_TYPES),
 			obsRepo.countCompanyObservations(),
 		]);

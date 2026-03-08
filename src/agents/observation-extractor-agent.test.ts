@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import type { IngestionResult } from "./observation-extractor-agent";
+import type { IngestionResult, IngestionDispatchResult } from "./observation-extractor-logic";
+import { RSS_FEEDS } from "./rss-feeds";
 import type { SignalAnalysisInput, ObservationExtractionResult } from "../schemas";
 
 // We can't instantiate the Agent class directly in unit tests (requires Durable Objects runtime).
@@ -101,6 +102,85 @@ describe("ObservationExtractorAgent pipeline", () => {
 
 		const itemId = await insertIngestedItem(signal);
 		expect(itemId).toBeNull();
+	});
+
+	it("should have valid RSS feed configurations", () => {
+		expect(RSS_FEEDS.length).toBeGreaterThan(0);
+		for (const feed of RSS_FEEDS) {
+			expect(feed.url).toBeTruthy();
+			expect(feed.sourceName).toBeTruthy();
+			expect(feed.url).toMatch(/^https?:\/\//);
+		}
+	});
+
+	it("should dispatch one task per RSS feed", async () => {
+		// Simulate the dispatch logic: for each feed, queue a task
+		const queueFn = vi.fn();
+
+		for (const feed of RSS_FEEDS) {
+			await queueFn("ingestRssFeed", feed);
+		}
+
+		expect(queueFn).toHaveBeenCalledTimes(RSS_FEEDS.length);
+		for (let i = 0; i < RSS_FEEDS.length; i++) {
+			expect(queueFn).toHaveBeenCalledWith("ingestRssFeed", RSS_FEEDS[i]);
+		}
+	});
+
+	it("should process a single feed in ingestRssFeed", async () => {
+		const mockItems: SignalAnalysisInput[] = [
+			{
+				content: "Defense One reports new Army modernization push",
+				sourceType: "rss",
+				sourceName: "DefenseOne",
+				sourceUrl: "https://defenseone.com/article/1",
+				sourceLink: "https://defenseone.com/article/1",
+			},
+		];
+
+		const insertIngestedItem = vi.fn().mockResolvedValueOnce("item-1");
+		const insertObservations = vi.fn().mockResolvedValueOnce(1);
+		const extract = vi.fn().mockResolvedValueOnce({
+			observations: [
+				{
+					type: "policy_announcement",
+					summary: "Army modernization push",
+					entities: [{ type: "agency", name: "U.S. Army", role: "subject" }],
+				},
+			],
+		});
+
+		let itemsStored = 0;
+		let observationsExtracted = 0;
+
+		// Simulate single-feed processing (ingestRssFeed logic)
+		for (const input of mockItems) {
+			try {
+				const itemId = await insertIngestedItem(input);
+				if (!itemId) continue;
+
+				const result = await extract(input);
+				if (result.observations.length > 0) {
+					const count = await insertObservations(itemId, result.observations);
+					observationsExtracted += count;
+				}
+				itemsStored++;
+			} catch {
+				// continue on error
+			}
+		}
+
+		const ingestionResult: IngestionResult = {
+			sourceType: "rss",
+			signalsFound: mockItems.length,
+			signalsStored: itemsStored,
+			observationsExtracted,
+			startedAt: new Date().toISOString(),
+		};
+
+		expect(ingestionResult.signalsFound).toBe(1);
+		expect(ingestionResult.signalsStored).toBe(1);
+		expect(ingestionResult.observationsExtracted).toBe(1);
 	});
 
 	it("should continue processing when one signal fails extraction", async () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { EntityEnricher, shouldSelfScheduleEnrichment, type EnrichmentDeps, type EnrichmentResult } from "./entity-enricher";
-import type { ProfileForEnrichment } from "../db/enrichment-repository";
+import type { ProfileForEnrichment, EnrichmentContext } from "../db/enrichment-repository";
 import type { PersonDossier } from "../schemas";
 
 function makeDeps(overrides: Partial<EnrichmentDeps> = {}): EnrichmentDeps {
@@ -171,6 +171,32 @@ describe("EntityEnricher", () => {
 		expect(result.profilesProcessed).toBe(10);
 		expect(result.profilesEnriched).toBe(10);
 		expect(result.remainingProfileIds).toEqual(["p-10", "p-11"]);
+	});
+
+	it("passes context to search dependency when profile has context", async () => {
+		const context: EnrichmentContext = {
+			coOccurringEntities: [{ canonicalName: "Department of the Army", type: "agency" }],
+			observationTypes: ["solicitation"],
+		};
+		const profileWithContext: ProfileForEnrichment = {
+			id: "p-ctx",
+			type: "person",
+			canonicalName: "Michael T. Geegan",
+			context,
+		};
+
+		const deps = makeDeps({
+			search: vi.fn().mockResolvedValue([
+				{ title: "Result", url: "https://example.com", description: "desc" },
+			]),
+			fetchPages: vi.fn().mockResolvedValue(["Some text about Geegan"]),
+			extractDossier: vi.fn().mockResolvedValue(DOSSIER),
+		});
+
+		const enricher = new EntityEnricher(deps);
+		await enricher.run([profileWithContext]);
+
+		expect(deps.search).toHaveBeenCalledWith("Michael T. Geegan", "person", context);
 	});
 
 	it("returns empty remainingProfileIds when all profiles fit in batch", async () => {

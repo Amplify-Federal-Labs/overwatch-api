@@ -170,6 +170,68 @@ describe("ObservationExtractor", () => {
 		).rejects.toThrow("Empty response from Worker AI");
 	});
 
+	it("should include sourceMetadata in the AI prompt when present", async () => {
+		const aiResponse: ObservationExtractionResult = {
+			observations: [
+				{
+					type: "solicitation",
+					summary: "DLA issued RFP for drone services",
+					entities: [
+						{ type: "agency", name: "DLA", role: "subject" },
+						{ type: "person", name: "Randal D. Halbrooks", role: "mentioned" },
+					],
+					attributes: {
+						contactEmail: "randal.halbrooks@dla.mil",
+						contactPhone: "555-987-6543",
+					},
+				},
+			],
+		};
+
+		const { extractor, mockClient } = createExtractor(aiResponse);
+
+		await extractor.extract({
+			content: "SAM.gov Opportunity — Solicitation\nsUAS Drone Solicitation",
+			sourceType: "sam_gov",
+			sourceName: "SAM.gov",
+			sourceMetadata: {
+				contactName: "Randal D. Halbrooks",
+				contactEmail: "randal.halbrooks@dla.mil",
+				contactPhone: "555-987-6543",
+				naicsCode: "336411",
+				solicitationNumber: "W912L726QA002",
+			},
+		});
+
+		const callArgs = mockClient.chat.completions.create.mock.calls[0][0];
+		const userMessage = callArgs.messages[1].content as string;
+
+		expect(userMessage).toContain("Structured Metadata");
+		expect(userMessage).toContain("contactName: Randal D. Halbrooks");
+		expect(userMessage).toContain("contactEmail: randal.halbrooks@dla.mil");
+		expect(userMessage).toContain("contactPhone: 555-987-6543");
+		expect(userMessage).toContain("naicsCode: 336411");
+	});
+
+	it("should not include metadata section when sourceMetadata is absent", async () => {
+		const aiResponse: ObservationExtractionResult = {
+			observations: [],
+		};
+
+		const { extractor, mockClient } = createExtractor(aiResponse);
+
+		await extractor.extract({
+			content: "Some RSS article",
+			sourceType: "rss",
+			sourceName: "GovConWire",
+		});
+
+		const callArgs = mockClient.chat.completions.create.mock.calls[0][0];
+		const userMessage = callArgs.messages[1].content as string;
+
+		expect(userMessage).not.toContain("Structured Metadata");
+	});
+
 	it("should filter out observations with invalid types", async () => {
 		const mockClient = {
 			chat: {

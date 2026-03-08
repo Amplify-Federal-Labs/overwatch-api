@@ -97,6 +97,16 @@ export class SignalRepository {
 		return result?.count ?? 0;
 	}
 
+	async countRecent(sinceDaysAgo: number): Promise<number> {
+		const since = new Date(Date.now() - sinceDaysAgo * 24 * 60 * 60 * 1000).toISOString();
+		const result = await this.db
+			.select({ count: sql<number>`count(*)` })
+			.from(signals)
+			.where(sql`${signals.createdAt} >= ${since}`)
+			.get();
+		return result?.count ?? 0;
+	}
+
 	async findByIngestedItemId(ingestedItemId: string) {
 		return this.db
 			.select()

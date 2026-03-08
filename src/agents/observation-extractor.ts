@@ -48,6 +48,8 @@ Entity roles:
 
 Attributes: Include structured details like dollar amounts, contract numbers, solicitation IDs, NAICS codes, dates, locations. Use string values only.
 
+IMPORTANT: Named government contacts (contracting officers, program managers, points of contact) mentioned in solicitations or contract awards MUST be extracted as person entities with role "mentioned". These are key stakeholders for relationship tracking. If structured metadata includes contact details (name, email, phone), always create a person entity for them.
+
 Extract ONLY what is explicitly stated in the content. Do not infer or speculate.
 If the content contains no actionable observations, return {"observations": []}.
 
@@ -66,12 +68,16 @@ export class ObservationExtractor {
 	}
 
 	async extract(input: SignalAnalysisInput): Promise<ObservationExtractionResult> {
+		const metadataSection = input.sourceMetadata && Object.keys(input.sourceMetadata).length > 0
+			? `\n\nStructured Metadata:\n${Object.entries(input.sourceMetadata).map(([k, v]) => `${k}: ${v}`).join("\n")}`
+			: "";
+
 		const userMessage = `Source: ${input.sourceName} (${input.sourceType})${input.sourceUrl ? `\nURL: ${input.sourceUrl}` : ""}
 
 Content:
 ---
 ${input.content}
----`;
+---${metadataSection}`;
 
 		const response = await this.client.chat.completions.create({
 			model: `workers-ai/${this.model}`,

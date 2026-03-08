@@ -1,10 +1,10 @@
-import type { ProfileForEnrichment } from "../db/enrichment-repository";
+import type { ProfileForEnrichment, EnrichmentContext } from "../db/enrichment-repository";
 import type { SearchResult } from "./brave-searcher";
 import type { Dossier } from "../schemas";
 import type { Logger } from "../logger";
 
 export interface EnrichmentDeps {
-	search: (name: string, type: string) => Promise<SearchResult[]>;
+	search: (name: string, type: string, context?: EnrichmentContext) => Promise<SearchResult[]>;
 	fetchPages: (urls: string[]) => Promise<string[]>;
 	extractDossier: (name: string, type: string, pages: string[]) => Promise<Dossier | null>;
 	saveDossier: (profileId: string, dossier: Dossier) => Promise<void>;
@@ -95,7 +95,7 @@ export class EntityEnricher {
 
 		log?.info("Enriching profile", { profileId: profile.id, name: profile.canonicalName, type: profile.type });
 
-		const searchResults = await this.deps.search(profile.canonicalName, profile.type);
+		const searchResults = await this.deps.search(profile.canonicalName, profile.type, profile.context);
 		log?.info("Search results", {
 			profileId: profile.id,
 			name: profile.canonicalName,

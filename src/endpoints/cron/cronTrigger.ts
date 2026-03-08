@@ -1,6 +1,6 @@
 import { contentJson, OpenAPIRoute } from "chanfana";
 import { z } from "zod";
-import { CRON_SCHEDULE, runCronJob } from "../../cron/scheduler";
+import { findJobByName, runCronJob } from "../../cron/scheduler";
 import type { AppContext } from "../../types";
 
 export class CronTrigger extends OpenAPIRoute {
@@ -51,7 +51,7 @@ export class CronTrigger extends OpenAPIRoute {
 		const data = await this.getValidatedData<typeof this.schema>();
 		const { jobName } = data.params;
 
-		const job = [...CRON_SCHEDULE.values()].find((j) => j.name === jobName);
+		const job = findJobByName(jobName);
 		if (!job) {
 			return c.json(
 				{ success: false, errors: [{ code: 4040, message: `Unknown job: ${jobName}` }] },

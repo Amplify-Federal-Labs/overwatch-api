@@ -2,6 +2,7 @@ import { Agent, getAgentByName } from "agents";
 import { EntityResolver } from "./entity-resolver";
 import { EntityProfileRepository, groupUnresolvedByName } from "../db/entity-profile-repository";
 import { createAiMatchFn } from "./entity-match-ai";
+import { resolveGroups } from "./entity-resolver-logic";
 import type { SynthesisAgent } from "./synthesis-agent";
 import type { EnrichmentAgent } from "./enrichment-agent";
 import { Logger } from "../logger";
@@ -11,12 +12,14 @@ export interface ResolutionRunResult {
 	groupCount: number;
 	resolvedCount: number;
 	newProfilesCreated: number;
+	failedGroups: string[];
 	startedAt: string;
 }
 
 interface AgentState {
 	lastRun?: string;
 	lastResult?: ResolutionRunResult;
+	failedGroups?: string[];
 }
 
 export class EntityResolverAgent extends Agent<Env, AgentState> {
@@ -46,7 +49,7 @@ export class EntityResolverAgent extends Agent<Env, AgentState> {
 		const unresolved = await repository.findUnresolvedEntities();
 		if (unresolved.length === 0) {
 			logger.info("No unresolved entities found");
-			return { unresolvedCount: 0, groupCount: 0, resolvedCount: 0, newProfilesCreated: 0, startedAt };
+			return { unresolvedCount: 0, groupCount: 0, resolvedCount: 0, newProfilesCreated: 0, failedGroups: [], startedAt };
 		}
 
 		logger.info("Found unresolved entities", { count: unresolved.length });
@@ -58,107 +61,70 @@ export class EntityResolverAgent extends Agent<Env, AgentState> {
 		// Step 3: Get existing profiles with aliases
 		const existingProfiles = await repository.findAllProfilesWithAliases();
 
-		let resolvedCount = 0;
-		let newProfilesCreated = 0;
-		const newProfileIds: string[] = [];
-		const resolvedProfileIds = new Set<string>();
+		// Step 4: Resolve each group (batched DB ops, per-group error isolation)
+		const result = await resolveGroups(groups, {
+			resolver,
+			repository,
+			existingProfiles,
+			logger,
+		});
 
-		// Step 4: Resolve each group
-		for (const group of groups) {
-			try {
-				const result = await resolver.resolveGroup(group, existingProfiles);
-				let profileId = result.profileId;
+		// Track failed groups in agent state for retry on next run
+		const previousFailedGroups = this.state.failedGroups ?? [];
+		const allFailedGroups = [...new Set([...result.failedGroups])];
 
-				if (result.isNew) {
-					// Create new profile
-					profileId = await repository.createProfile(group.entityType, group.mostCommonRawName);
-					newProfilesCreated++;
-					newProfileIds.push(profileId);
-					// Add to existing profiles for subsequent groups
-					existingProfiles.push({
-						id: profileId,
-						canonicalName: group.mostCommonRawName,
-						type: group.entityType,
-						aliases: [group.mostCommonRawName],
-						firstSeenAt: new Date().toISOString(),
-						lastSeenAt: new Date().toISOString(),
-						observationCount: 0,
-						summary: null,
-						trajectory: null,
-						relevanceScore: null,
-						lastSynthesizedAt: null,
-						dossier: null,
-						enrichmentStatus: "pending",
-						lastEnrichedAt: null,
-						createdAt: new Date().toISOString(),
-					});
-				}
-
-				if (profileId) {
-					// Resolve all entities in this group
-					const entityIds = group.entities.map((e) => e.id);
-					await repository.resolveEntities(entityIds, profileId);
-					resolvedCount += entityIds.length;
-					resolvedProfileIds.add(profileId);
-
-					// Add alias if it's a fuzzy match (the raw name may differ from canonical)
-					if (result.matchMethod === "ai_fuzzy") {
-						await repository.addAlias(profileId, group.mostCommonRawName);
-					}
-
-					// Update profile stats
-					await repository.updateProfileStats(profileId);
-				}
-			} catch (err) {
-				logger.error("Failed to resolve group", {
-					name: group.mostCommonRawName,
-					error: err instanceof Error ? err : new Error(String(err)),
-				});
-			}
+		if (allFailedGroups.length > 0) {
+			logger.warn("Some groups failed resolution, will retry on next run", {
+				failedGroups: allFailedGroups,
+				previouslyFailed: previousFailedGroups,
+			});
+		} else if (previousFailedGroups.length > 0) {
+			logger.info("All previously failed groups resolved successfully");
 		}
 
 		const runResult: ResolutionRunResult = {
 			unresolvedCount: unresolved.length,
 			groupCount: groups.length,
-			resolvedCount,
-			newProfilesCreated,
+			resolvedCount: result.resolvedCount,
+			newProfilesCreated: result.newProfilesCreated,
+			failedGroups: allFailedGroups,
 			startedAt,
 		};
 
 		this.setState({
 			lastRun: new Date().toISOString(),
 			lastResult: runResult,
+			failedGroups: allFailedGroups,
 		});
 
 		logger.info("Entity resolution complete", { ...runResult });
 
 		// Chain: queue synthesis + enrichment in parallel (fire-and-forget)
-		const allResolvedProfileIds = [...resolvedProfileIds];
-		if (allResolvedProfileIds.length > 0) {
+		if (result.resolvedProfileIds.length > 0) {
 			try {
 				const synthesis = await getAgentByName<Env, SynthesisAgent>(
 					this.env.SYNTHESIS,
 					"singleton",
 				);
-				await synthesis.queue("synthesizeProfiles", allResolvedProfileIds);
-				logger.info("Synthesis queued after entity resolution", { profileIds: allResolvedProfileIds });
+				await synthesis.queue("synthesizeProfiles", result.resolvedProfileIds);
+				logger.info("Synthesis queued after entity resolution", { profileIds: result.resolvedProfileIds });
 			} catch (err) {
 				logger.error("Failed to queue synthesis", {
-					error: err instanceof Error ? err : new Error(String(err)),
+					error: err instanceof Error ? err.message : String(err),
 				});
 			}
 
-			if (newProfileIds.length > 0) {
+			if (result.newProfileIds.length > 0) {
 				try {
 					const enrichment = await getAgentByName<Env, EnrichmentAgent>(
 						this.env.ENRICHMENT,
 						"singleton",
 					);
-					await enrichment.queue("enrichProfiles", newProfileIds);
-					logger.info("Enrichment queued after entity resolution", { profileIds: newProfileIds });
+					await enrichment.queue("enrichProfiles", result.newProfileIds);
+					logger.info("Enrichment queued after entity resolution", { profileIds: result.newProfileIds });
 				} catch (err) {
 					logger.error("Failed to queue enrichment", {
-						error: err instanceof Error ? err : new Error(String(err)),
+						error: err instanceof Error ? err.message : String(err),
 					});
 				}
 			}

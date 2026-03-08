@@ -168,6 +168,20 @@ describe("formatSamGovContent", () => {
 		expect(content).toContain("Contact: John Smith (Contracting Officer) — john.smith@army.mil");
 	});
 
+	it("includes contact phone in formatted content", () => {
+		const content = formatSamGovContent(SAMPLE_OPPORTUNITY);
+		expect(content).toContain("555-123-4567");
+	});
+
+	it("includes description in formatted content when present", () => {
+		const withDescription: SamGovOpportunity = {
+			...SAMPLE_OPPORTUNITY,
+			description: "The Army requires cloud migration services for IL5 classified workloads.",
+		};
+		const content = formatSamGovContent(withDescription);
+		expect(content).toContain("The Army requires cloud migration services for IL5 classified workloads.");
+	});
+
 	it("omits optional fields when missing", () => {
 		const minimal: SamGovOpportunity = {
 			noticeId: "min001",
@@ -236,5 +250,43 @@ describe("opportunitiesToSignals", () => {
 
 	it("returns empty array for empty input", () => {
 		expect(opportunitiesToSignals([])).toEqual([]);
+	});
+
+	it("populates sourceMetadata with structured SAM.gov fields", () => {
+		const signals = opportunitiesToSignals([SAMPLE_OPPORTUNITY]);
+		const meta = signals[0].sourceMetadata;
+
+		expect(meta).toBeDefined();
+		expect(meta!.contactName).toBe("John Smith");
+		expect(meta!.contactTitle).toBe("Contracting Officer");
+		expect(meta!.contactEmail).toBe("john.smith@army.mil");
+		expect(meta!.contactPhone).toBe("555-123-4567");
+		expect(meta!.naicsCode).toBe("541512");
+		expect(meta!.classificationCode).toBe("D301");
+		expect(meta!.setAside).toBe("Service-Disabled Veteran-Owned Small Business");
+		expect(meta!.responseDeadline).toBe("2026-04-15 14:00:00");
+		expect(meta!.solicitationNumber).toBe("W911QX-26-R-0042");
+		expect(meta!.location).toBe("Fort Belvoir, Virginia, 22060");
+		expect(meta!.agency).toBe("DEPT OF THE ARMY");
+	});
+
+	it("omits undefined sourceMetadata fields for minimal opportunity", () => {
+		const minimal: SamGovOpportunity = {
+			noticeId: "min001",
+			title: "Minimal",
+			postedDate: "2026-03-01",
+			type: "Solicitation",
+			baseType: "Solicitation",
+			active: "Yes",
+			pointOfContact: [],
+			award: null,
+		};
+
+		const signals = opportunitiesToSignals([minimal]);
+		const meta = signals[0].sourceMetadata;
+
+		expect(meta).toBeDefined();
+		expect(meta!.contactName).toBeUndefined();
+		expect(meta!.naicsCode).toBeUndefined();
 	});
 });

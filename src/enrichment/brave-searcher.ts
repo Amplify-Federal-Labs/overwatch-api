@@ -1,4 +1,5 @@
 import { isBlockedUrl } from "./page-fetcher";
+import type { EnrichmentContext } from "../db/enrichment-repository";
 import type { Logger } from "../logger";
 
 export interface SearchResult {
@@ -11,7 +12,28 @@ type FetchFn = typeof fetch;
 
 const DEFAULT_MAX_RESULTS = 5;
 
-export function buildSearchQuery(entityName: string, entityType: string): string {
+export function buildSearchQuery(entityName: string, entityType: string, context?: EnrichmentContext): string {
+	if (context) {
+		const agency = context.coOccurringEntities.find((e) => e.type === "agency");
+		const obsType = context.observationTypes[0];
+
+		switch (entityType) {
+			case "person":
+				if (agency) {
+					return `"${entityName}" "${agency.canonicalName}"`;
+				}
+				if (obsType) {
+					return `"${entityName}" ${obsType} government`;
+				}
+				break;
+			case "agency":
+				if (obsType) {
+					return `"${entityName}" ${obsType} government`;
+				}
+				break;
+		}
+	}
+
 	switch (entityType) {
 		case "person":
 			return `${entityName} defense government official`;
@@ -37,8 +59,9 @@ export class BraveSearcher {
 		entityName: string,
 		entityType: string,
 		maxResults: number = DEFAULT_MAX_RESULTS,
+		context?: EnrichmentContext,
 	): Promise<SearchResult[]> {
-		const query = buildSearchQuery(entityName, entityType);
+		const query = buildSearchQuery(entityName, entityType, context);
 		const params = new URLSearchParams({
 			q: query,
 			count: "20", // fetch extra since blocked domains are filtered out
