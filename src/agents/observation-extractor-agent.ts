@@ -1,6 +1,7 @@
-import { Agent } from "agents";
+import { Agent, getAgentByName } from "agents";
 import { ObservationExtractor } from "./observation-extractor";
 import { ObservationRepository } from "../db/observation-repository";
+import type { EntityResolverAgent } from "./entity-resolver-agent";
 import { fetchRssFeed } from "../signals/rss/rss-fetcher";
 import { rssItemsToSignals } from "../signals/rss/rss-parser";
 import { fetchSamGovOpportunities, fetchApbiEvents } from "../signals/sam-gov/sam-gov-fetcher";
@@ -61,28 +62,28 @@ export class ObservationExtractorAgent extends Agent<Env, AgentState> {
 
 		logger.info("Starting observation extraction", { sourceType });
 
-		const signals = await this.fetchSignals(sourceType, logger);
+		const inputs = await this.fetchInputs(sourceType, logger);
 
-		let signalsStored = 0;
+		let itemsStored = 0;
 		let observationsExtracted = 0;
 
-		for (const signal of signals) {
+		for (const input of inputs) {
 			try {
-				const signalId = await repository.insertSignal(signal);
-				if (!signalId) {
+				const itemId = await repository.insertIngestedItem(input);
+				if (!itemId) {
 					continue; // duplicate
 				}
 
-				const result = await extractor.extract(signal);
+				const result = await extractor.extract(input);
 				if (result.observations.length > 0) {
-					const count = await repository.insertObservations(signalId, result.observations);
+					const count = await repository.insertObservations(itemId, result.observations);
 					observationsExtracted += count;
 				}
 
-				signalsStored++;
+				itemsStored++;
 			} catch (err) {
-				logger.error("Failed to process signal", {
-					sourceName: signal.sourceName,
+				logger.error("Failed to process ingested item", {
+					sourceName: input.sourceName,
 					error: err instanceof Error ? err : new Error(String(err)),
 				});
 			}
@@ -90,8 +91,8 @@ export class ObservationExtractorAgent extends Agent<Env, AgentState> {
 
 		const ingestionResult: IngestionResult = {
 			sourceType,
-			signalsFound: signals.length,
-			signalsStored,
+			signalsFound: inputs.length,
+			signalsStored: itemsStored,
 			observationsExtracted,
 			startedAt,
 		};
@@ -102,10 +103,27 @@ export class ObservationExtractorAgent extends Agent<Env, AgentState> {
 		});
 
 		logger.info("Observation extraction complete", { ...ingestionResult });
+
+		// Chain: queue entity resolution if new items were stored
+		if (itemsStored > 0) {
+			try {
+				const resolver = await getAgentByName<Env, EntityResolverAgent>(
+					this.env.ENTITY_RESOLVER,
+					"singleton",
+				);
+				await resolver.queue("runResolution", {});
+				logger.info("Entity resolution queued after ingestion");
+			} catch (err) {
+				logger.error("Failed to queue entity resolution", {
+					error: err instanceof Error ? err : new Error(String(err)),
+				});
+			}
+		}
+
 		return ingestionResult;
 	}
 
-	private async fetchSignals(
+	private async fetchInputs(
 		sourceType: SignalSourceType,
 		logger: Logger,
 	): Promise<SignalAnalysisInput[]> {
@@ -129,11 +147,11 @@ export class ObservationExtractorAgent extends Agent<Env, AgentState> {
 	}
 
 	private async fetchAllRssFeeds(logger: Logger): Promise<SignalAnalysisInput[]> {
-		const allSignals: SignalAnalysisInput[] = [];
+		const allInputs: SignalAnalysisInput[] = [];
 		for (const feed of RSS_FEEDS) {
 			const items = await fetchRssFeed(fetch, feed.url, logger);
-			allSignals.push(...rssItemsToSignals(items, feed.sourceName));
+			allInputs.push(...rssItemsToSignals(items, feed.sourceName));
 		}
-		return allSignals;
+		return allInputs;
 	}
 }

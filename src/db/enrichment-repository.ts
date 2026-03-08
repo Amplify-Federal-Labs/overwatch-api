@@ -24,10 +24,8 @@ export class EnrichmentRepository {
 		this.db = drizzle(d1);
 	}
 
-	async findProfilesNeedingEnrichment(
-		types: string[],
-		limit: number = 10,
-	): Promise<ProfileForEnrichment[]> {
+	async findProfilesByIds(ids: string[]): Promise<ProfileForEnrichment[]> {
+		if (ids.length === 0) return [];
 		return this.db
 			.select({
 				id: entityProfiles.id,
@@ -36,9 +34,8 @@ export class EnrichmentRepository {
 			})
 			.from(entityProfiles)
 			.where(
-				sql`${entityProfiles.type} IN (${sql.join(types.map((t) => sql`${t}`), sql`, `)}) AND ${entityProfiles.enrichmentStatus} = 'pending'`,
+				sql`${entityProfiles.id} IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`,
 			)
-			.limit(limit)
 			.all();
 	}
 

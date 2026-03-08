@@ -1,37 +1,39 @@
 import { z } from "zod";
-import { SignalSourceTypeEnum, EntityTypeEnum } from "./signal";
-import { ObservationTypeEnum, EntityRoleEnum } from "./observation";
+import { CompetencyCodeEnum } from "./constants";
 
-export const ObservationEntityRefResponseSchema = z.object({
-	id: z.number(),
-	observationId: z.number(),
-	role: EntityRoleEnum,
-	entityType: EntityTypeEnum,
-	rawName: z.string(),
-	entityProfileId: z.string().nullable(),
-	resolvedAt: z.string().nullable(),
+export const SignalTypeEnum = z.enum(["opportunity", "strategy", "competitor"]);
+export type SignalType = z.infer<typeof SignalTypeEnum>;
+
+export const SignalEntitySchema = z.object({
+	type: z.string(),
+	value: z.string(),
+	confidence: z.number(),
 });
 
-export const ObservationResponseSchema = z.object({
-	id: z.number(),
-	signalId: z.string(),
-	type: ObservationTypeEnum,
-	summary: z.string(),
-	attributes: z.record(z.string(), z.string()).nullable(),
-	sourceDate: z.string().nullable(),
-	createdAt: z.string(),
-	entities: z.array(ObservationEntityRefResponseSchema),
-});
-
-export const SignalFeedItemSchema = z.object({
+export const SignalStakeholderSchema = z.object({
 	id: z.string(),
-	sourceType: SignalSourceTypeEnum,
-	sourceName: z.string(),
-	sourceUrl: z.string().nullable(),
-	sourceLink: z.string().nullable(),
-	content: z.string(),
-	sourceMetadata: z.record(z.string(), z.string()).nullable(),
-	createdAt: z.string(),
-	observations: z.array(ObservationResponseSchema),
+	name: z.string(),
 });
-export type SignalFeedItem = z.infer<typeof SignalFeedItemSchema>;
+
+export const SignalSchema = z.object({
+	id: z.string(),
+	date: z.string(),
+	branch: z.string(),
+	source: z.string(),
+	title: z.string(),
+	summary: z.string(),
+	tags: z.array(z.string()),
+	relevance: z.number(),
+	relevanceRationale: z.string(),
+	type: SignalTypeEnum,
+	competencies: z.array(CompetencyCodeEnum),
+	play: z.string(),
+	starred: z.boolean(),
+	stakeholders: z.array(SignalStakeholderSchema),
+	competitors: z.array(z.string()),
+	vendors: z.array(z.string()),
+	entities: z.array(SignalEntitySchema),
+	sourceUrl: z.string(),
+	sourceMetadata: z.record(z.string(), z.string()).nullable(),
+});
+export type Signal = z.infer<typeof SignalSchema>;

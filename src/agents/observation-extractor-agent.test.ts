@@ -55,7 +55,7 @@ describe("ObservationExtractorAgent pipeline", () => {
 		];
 
 		// Simulate agent pipeline
-		const insertSignal = vi.fn()
+		const insertIngestedItem = vi.fn()
 			.mockResolvedValueOnce("signal-1")
 			.mockResolvedValueOnce("signal-2");
 
@@ -71,12 +71,12 @@ describe("ObservationExtractorAgent pipeline", () => {
 		let observationsExtracted = 0;
 
 		for (const signal of mockSignals) {
-			const signalId = await insertSignal(signal);
-			if (!signalId) continue;
+			const itemId = await insertIngestedItem(signal);
+			if (!itemId) continue;
 
 			const result = await extract(signal);
 			if (result.observations.length > 0) {
-				const count = await insertObservations(signalId, result.observations);
+				const count = await insertObservations(itemId, result.observations);
 				observationsExtracted += count;
 			}
 			signalsStored++;
@@ -84,13 +84,13 @@ describe("ObservationExtractorAgent pipeline", () => {
 
 		expect(signalsStored).toBe(2);
 		expect(observationsExtracted).toBe(2);
-		expect(insertSignal).toHaveBeenCalledTimes(2);
+		expect(insertIngestedItem).toHaveBeenCalledTimes(2);
 		expect(extract).toHaveBeenCalledTimes(2);
 		expect(insertObservations).toHaveBeenCalledTimes(2);
 	});
 
 	it("should skip duplicate signals", async () => {
-		const insertSignal = vi.fn().mockResolvedValue(null); // signal already exists
+		const insertIngestedItem = vi.fn().mockResolvedValue(null); // signal already exists
 
 		const signal: SignalAnalysisInput = {
 			content: "Old article",
@@ -99,12 +99,12 @@ describe("ObservationExtractorAgent pipeline", () => {
 			sourceLink: "https://govconwire.com/article/old",
 		};
 
-		const signalId = await insertSignal(signal);
-		expect(signalId).toBeNull();
+		const itemId = await insertIngestedItem(signal);
+		expect(itemId).toBeNull();
 	});
 
 	it("should continue processing when one signal fails extraction", async () => {
-		const insertSignal = vi.fn()
+		const insertIngestedItem = vi.fn()
 			.mockResolvedValueOnce("signal-1")
 			.mockResolvedValueOnce("signal-2");
 
@@ -132,12 +132,12 @@ describe("ObservationExtractorAgent pipeline", () => {
 
 		for (const signal of signals) {
 			try {
-				const signalId = await insertSignal(signal);
-				if (!signalId) continue;
+				const itemId = await insertIngestedItem(signal);
+				if (!itemId) continue;
 
 				const result = await extract(signal);
 				if (result.observations.length > 0) {
-					const count = await insertObservations(signalId, result.observations);
+					const count = await insertObservations(itemId, result.observations);
 					observationsExtracted += count;
 				}
 				signalsStored++;

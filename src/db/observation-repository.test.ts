@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSignalRow, buildObservationRow, buildEntityRefRows } from "./observation-repository";
+import { buildIngestedItemRow, buildObservationRow, buildEntityRefRows } from "./observation-repository";
 import type { SignalAnalysisInput, ObservationExtraction } from "../schemas";
 
 const SIGNAL_INPUT: SignalAnalysisInput = {
@@ -22,9 +22,9 @@ const OBSERVATION: ObservationExtraction = {
 	sourceDate: "2026-03-01",
 };
 
-describe("buildSignalRow", () => {
+describe("buildIngestedItemRow", () => {
 	it("should build a signal row from analysis input", () => {
-		const row = buildSignalRow(SIGNAL_INPUT);
+		const row = buildIngestedItemRow(SIGNAL_INPUT);
 
 		expect(row.id).toMatch(/^[0-9a-f-]{36}$/);
 		expect(row.sourceType).toBe("rss");
@@ -41,7 +41,7 @@ describe("buildSignalRow", () => {
 			sourceType: "rss",
 			sourceName: "Test",
 		};
-		const row = buildSignalRow(input);
+		const row = buildIngestedItemRow(input);
 
 		expect(row.sourceUrl).toBeNull();
 		expect(row.sourceLink).toBeNull();
@@ -64,7 +64,7 @@ describe("buildSignalRow", () => {
 				totalObligatedAmount: "5000000",
 			},
 		};
-		const row = buildSignalRow(input);
+		const row = buildIngestedItemRow(input);
 
 		expect(row.sourceMetadata).toBeDefined();
 	});

@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/d1";
-import { eq, isNull, or, sql, lt } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { entityProfiles, observations, observationEntities, insights } from "./schema";
 import type { InsightType } from "../schemas";
 
@@ -95,9 +95,9 @@ export class SynthesisRepository {
 		return result?.count ?? 0;
 	}
 
-	async findProfilesNeedingSynthesis(limit = 25): Promise<ProfileForSynthesis[]> {
-		// Profiles that: have observations AND (never synthesized OR have new observations since last synthesis)
-		const profiles = await this.db
+	async findProfilesByIds(ids: string[]): Promise<ProfileForSynthesis[]> {
+		if (ids.length === 0) return [];
+		return this.db
 			.select({
 				id: entityProfiles.id,
 				type: entityProfiles.type,
@@ -107,12 +107,9 @@ export class SynthesisRepository {
 			})
 			.from(entityProfiles)
 			.where(
-				sql`${entityProfiles.observationCount} > 0 AND (${entityProfiles.lastSynthesizedAt} IS NULL OR ${entityProfiles.lastSeenAt} > ${entityProfiles.lastSynthesizedAt})`,
+				sql`${entityProfiles.id} IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`,
 			)
-			.limit(limit)
 			.all();
-
-		return profiles;
 	}
 
 	async findObservationsForProfile(profileId: string): Promise<ObservationWithEntities[]> {

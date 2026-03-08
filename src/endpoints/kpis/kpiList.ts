@@ -31,9 +31,9 @@ export class KpiList extends OpenAPIRoute {
 		const synthRepo = new SynthesisRepository(c.env.DB);
 
 		const [totalSignals, totalObservations, recentSignals, recentObservations, totalEntityProfiles, totalInsights] = await Promise.all([
-			obsRepo.countSignals(),
+			obsRepo.countIngestedItems(),
 			obsRepo.countObservations(),
-			obsRepo.countRecentSignals(RECENT_DAYS),
+			obsRepo.countRecentIngestedItems(RECENT_DAYS),
 			obsRepo.countRecentObservations(RECENT_DAYS),
 			entityRepo.countProfiles(),
 			synthRepo.countInsights(),

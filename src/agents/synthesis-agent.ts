@@ -1,12 +1,20 @@
-import { Agent } from "agents";
+import { Agent, getAgentByName } from "agents";
 import { ProfileSynthesizer } from "./profile-synthesizer";
 import { SynthesisRepository, buildSynthesisContext } from "../db/synthesis-repository";
 import { Logger } from "../logger";
+import type { SignalMaterializerAgent } from "./signal-materializer-agent";
+
+const BATCH_SIZE = 25;
 
 export interface SynthesisRunResult {
 	profilesProcessed: number;
 	insightsGenerated: number;
+	remainingProfileIds: string[];
 	startedAt: string;
+}
+
+export function shouldSelfScheduleSynthesis(result: SynthesisRunResult): boolean {
+	return result.remainingProfileIds.length > 0 && result.profilesProcessed > 0;
 }
 
 interface AgentState {
@@ -22,27 +30,36 @@ export class SynthesisAgent extends Agent<Env, AgentState> {
 			return new Response("Method not allowed", { status: 405 });
 		}
 
-		const result = await this.runSynthesis();
+		const body = await request.json() as { profileIds?: string[] };
+		const result = await this.synthesizeProfiles(body.profileIds ?? []);
 		return new Response(JSON.stringify(result), {
 			headers: { "Content-Type": "application/json" },
 		});
 	}
 
-	async runSynthesis(): Promise<SynthesisRunResult> {
+	async synthesizeProfiles(profileIds: string[]): Promise<SynthesisRunResult> {
 		const logger = new Logger(this.env.LOG_LEVEL);
 		const repository = new SynthesisRepository(this.env.DB);
 		const synthesizer = new ProfileSynthesizer(this.env);
 		const startedAt = new Date().toISOString();
 
-		logger.info("Starting profile synthesis");
+		logger.info("Starting profile synthesis", { profileCount: profileIds.length });
 
-		const profiles = await repository.findProfilesNeedingSynthesis();
-		if (profiles.length === 0) {
-			logger.info("No profiles need synthesis");
-			return { profilesProcessed: 0, insightsGenerated: 0, startedAt };
+		if (profileIds.length === 0) {
+			logger.info("No profile IDs provided for synthesis");
+			return { profilesProcessed: 0, insightsGenerated: 0, remainingProfileIds: [], startedAt };
 		}
 
-		logger.info("Found profiles needing synthesis", { count: profiles.length });
+		const batch = profileIds.slice(0, BATCH_SIZE);
+		const remainingProfileIds = profileIds.slice(BATCH_SIZE);
+
+		const profiles = await repository.findProfilesByIds(batch);
+		if (profiles.length === 0) {
+			logger.info("No profiles found for provided IDs");
+			return { profilesProcessed: 0, insightsGenerated: 0, remainingProfileIds, startedAt };
+		}
+
+		logger.info("Found profiles for synthesis", { count: profiles.length });
 
 		let profilesProcessed = 0;
 		let insightsGenerated = 0;
@@ -101,6 +118,7 @@ export class SynthesisAgent extends Agent<Env, AgentState> {
 		const runResult: SynthesisRunResult = {
 			profilesProcessed,
 			insightsGenerated,
+			remainingProfileIds,
 			startedAt,
 		};
 
@@ -110,6 +128,29 @@ export class SynthesisAgent extends Agent<Env, AgentState> {
 		});
 
 		logger.info("Profile synthesis complete", { ...runResult });
+
+		// Self-schedule remaining profiles
+		if (shouldSelfScheduleSynthesis(runResult)) {
+			logger.info("Queuing next synthesis batch", { remainingCount: remainingProfileIds.length });
+			await this.queue("synthesizeProfiles", remainingProfileIds);
+		}
+
+		// Chain: queue signal materialization after synthesis
+		if (profilesProcessed > 0) {
+			try {
+				const materializer = await getAgentByName<Env, SignalMaterializerAgent>(
+					this.env.SIGNAL_MATERIALIZER,
+					"singleton",
+				);
+				await materializer.queue("materializeNew", {});
+				logger.info("Signal materialization queued after synthesis");
+			} catch (err) {
+				logger.error("Failed to queue signal materialization", {
+					error: err instanceof Error ? err : new Error(String(err)),
+				});
+			}
+		}
+
 		return runResult;
 	}
 }

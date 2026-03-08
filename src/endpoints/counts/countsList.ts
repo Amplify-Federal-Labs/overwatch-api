@@ -36,7 +36,7 @@ export class CountsList extends OpenAPIRoute {
 		const entityRepo = new EntityProfileRepository(c.env.DB);
 
 		const [signals, stakeholders, competitors] = await Promise.all([
-			obsRepo.countSignals(),
+			obsRepo.countIngestedItems(),
 			entityRepo.countProfilesByTypes(STAKEHOLDER_TYPES),
 			obsRepo.countCompanyObservations(),
 		]);

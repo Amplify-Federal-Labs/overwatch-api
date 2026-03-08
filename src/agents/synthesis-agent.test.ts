@@ -1,13 +1,21 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseSynthesisResponse } from "./profile-synthesizer";
 import { buildSynthesisContext } from "../db/synthesis-repository";
+
+vi.mock("agents", () => ({
+	Agent: class {},
+	getAgentByName: vi.fn(),
+}));
+
+import { shouldSelfScheduleSynthesis, type SynthesisRunResult } from "./synthesis-agent";
 import type { ObservationWithEntities, ProfileForSynthesis } from "../db/synthesis-repository";
 
 // Test the full synthesis pipeline that the agent orchestrates:
-// 1. Find profiles needing synthesis
-// 2. Gather observations for each profile
+// 1. Receive profile IDs from EntityResolverAgent
+// 2. Fetch profiles by ID, gather observations for each
 // 3. Build context → AI synthesis → parse response
 // 4. Store insights + update profile
+// 5. Self-schedule remaining profile IDs if batch exceeds limit
 
 describe("SynthesisAgent pipeline", () => {
 	it("builds context, synthesizes, and produces actionable output", () => {
@@ -85,11 +93,26 @@ describe("SynthesisAgent pipeline", () => {
 		expect(window).toBe("2026-01-15/2026-03-01");
 	});
 
-	it("handles profiles with no new observations gracefully", () => {
-		// The agent should skip profiles returned by findProfilesNeedingSynthesis
-		// when findObservationsForProfile returns empty
+	it("handles profiles with no observations gracefully", () => {
 		const observations: ObservationWithEntities[] = [];
 		const context = buildSynthesisContext("Ghost Entity", "person", observations);
 		expect(context).toContain("0 observations");
+	});
+});
+
+describe("shouldSelfScheduleSynthesis", () => {
+	it("returns true when remaining profiles exist and some processed", () => {
+		const result: SynthesisRunResult = { profilesProcessed: 10, insightsGenerated: 5, remainingProfileIds: ["p-1", "p-2"], startedAt: "2026-03-01T00:00:00Z" };
+		expect(shouldSelfScheduleSynthesis(result)).toBe(true);
+	});
+
+	it("returns false when no remaining profiles", () => {
+		const result: SynthesisRunResult = { profilesProcessed: 10, insightsGenerated: 5, remainingProfileIds: [], startedAt: "2026-03-01T00:00:00Z" };
+		expect(shouldSelfScheduleSynthesis(result)).toBe(false);
+	});
+
+	it("returns false when no profiles were processed (all failed)", () => {
+		const result: SynthesisRunResult = { profilesProcessed: 0, insightsGenerated: 0, remainingProfileIds: ["p-1"], startedAt: "2026-03-01T00:00:00Z" };
+		expect(shouldSelfScheduleSynthesis(result)).toBe(false);
 	});
 });

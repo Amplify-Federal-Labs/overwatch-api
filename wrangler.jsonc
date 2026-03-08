@@ -8,7 +8,7 @@
 		"enabled": true
 	},
 	"triggers": {
-		"crons": ["0 * * * *"]
+		"crons": ["0 0-2 * * *"]
 	},
 	"vars": {
 		"LOG_LEVEL": "ERROR"
@@ -24,12 +24,16 @@
 		"bindings": [
 			{ "name": "OBSERVATION_EXTRACTOR", "class_name": "ObservationExtractorAgent" },
 			{ "name": "ENTITY_RESOLVER", "class_name": "EntityResolverAgent" },
-			{ "name": "SYNTHESIS", "class_name": "SynthesisAgent" }
+			{ "name": "SYNTHESIS", "class_name": "SynthesisAgent" },
+			{ "name": "SIGNAL_MATERIALIZER", "class_name": "SignalMaterializerAgent" },
+			{ "name": "ENRICHMENT", "class_name": "EnrichmentAgent" }
 		]
 	},
 	"migrations": [
 		{ "tag": "v1", "new_sqlite_classes": ["ObservationExtractorAgent"] },
 		{ "tag": "v2", "new_sqlite_classes": ["EntityResolverAgent"] },
-		{ "tag": "v3", "new_sqlite_classes": ["SynthesisAgent"] }
+		{ "tag": "v3", "new_sqlite_classes": ["SynthesisAgent"] },
+		{ "tag": "v4", "new_sqlite_classes": ["SignalMaterializerAgent"] },
+		{ "tag": "v5", "new_sqlite_classes": ["EnrichmentAgent"] }
 	]
 }

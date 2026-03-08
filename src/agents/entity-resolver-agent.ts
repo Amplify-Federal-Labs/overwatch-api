@@ -1,7 +1,9 @@
-import { Agent } from "agents";
+import { Agent, getAgentByName } from "agents";
 import { EntityResolver } from "./entity-resolver";
 import { EntityProfileRepository, groupUnresolvedByName } from "../db/entity-profile-repository";
 import { createAiMatchFn } from "./entity-match-ai";
+import type { SynthesisAgent } from "./synthesis-agent";
+import type { EnrichmentAgent } from "./enrichment-agent";
 import { Logger } from "../logger";
 
 export interface ResolutionRunResult {
@@ -58,6 +60,8 @@ export class EntityResolverAgent extends Agent<Env, AgentState> {
 
 		let resolvedCount = 0;
 		let newProfilesCreated = 0;
+		const newProfileIds: string[] = [];
+		const resolvedProfileIds = new Set<string>();
 
 		// Step 4: Resolve each group
 		for (const group of groups) {
@@ -69,6 +73,7 @@ export class EntityResolverAgent extends Agent<Env, AgentState> {
 					// Create new profile
 					profileId = await repository.createProfile(group.entityType, group.mostCommonRawName);
 					newProfilesCreated++;
+					newProfileIds.push(profileId);
 					// Add to existing profiles for subsequent groups
 					existingProfiles.push({
 						id: profileId,
@@ -94,6 +99,7 @@ export class EntityResolverAgent extends Agent<Env, AgentState> {
 					const entityIds = group.entities.map((e) => e.id);
 					await repository.resolveEntities(entityIds, profileId);
 					resolvedCount += entityIds.length;
+					resolvedProfileIds.add(profileId);
 
 					// Add alias if it's a fuzzy match (the raw name may differ from canonical)
 					if (result.matchMethod === "ai_fuzzy") {
@@ -125,6 +131,39 @@ export class EntityResolverAgent extends Agent<Env, AgentState> {
 		});
 
 		logger.info("Entity resolution complete", { ...runResult });
+
+		// Chain: queue synthesis + enrichment in parallel (fire-and-forget)
+		const allResolvedProfileIds = [...resolvedProfileIds];
+		if (allResolvedProfileIds.length > 0) {
+			try {
+				const synthesis = await getAgentByName<Env, SynthesisAgent>(
+					this.env.SYNTHESIS,
+					"singleton",
+				);
+				await synthesis.queue("synthesizeProfiles", allResolvedProfileIds);
+				logger.info("Synthesis queued after entity resolution", { profileIds: allResolvedProfileIds });
+			} catch (err) {
+				logger.error("Failed to queue synthesis", {
+					error: err instanceof Error ? err : new Error(String(err)),
+				});
+			}
+
+			if (newProfileIds.length > 0) {
+				try {
+					const enrichment = await getAgentByName<Env, EnrichmentAgent>(
+						this.env.ENRICHMENT,
+						"singleton",
+					);
+					await enrichment.queue("enrichProfiles", newProfileIds);
+					logger.info("Enrichment queued after entity resolution", { profileIds: newProfileIds });
+				} catch (err) {
+					logger.error("Failed to queue enrichment", {
+						error: err instanceof Error ? err : new Error(String(err)),
+					});
+				}
+			}
+		}
+
 		return runResult;
 	}
 }

@@ -4,84 +4,53 @@ vi.mock("agents", () => ({
 	getAgentByName: vi.fn(),
 }));
 
-import { getScheduledJob, CRON_JOBS } from "./scheduler";
+import { getScheduledJob, CRON_SCHEDULE } from "./scheduler";
 
-describe("CRON_JOBS", () => {
-	it("has six jobs in order: rss, sam_gov, fpds, entity_resolution, synthesis, enrichment", () => {
-		expect(CRON_JOBS).toHaveLength(6);
-		expect(CRON_JOBS[0].name).toBe("rss");
-		expect(CRON_JOBS[1].name).toBe("sam_gov");
-		expect(CRON_JOBS[2].name).toBe("fpds");
-		expect(CRON_JOBS[3].name).toBe("entity_resolution");
-		expect(CRON_JOBS[4].name).toBe("synthesis");
-		expect(CRON_JOBS[5].name).toBe("enrichment");
+describe("CRON_SCHEDULE", () => {
+	it("has three ingestion jobs at hours 0, 1, 2", () => {
+		expect(CRON_SCHEDULE.size).toBe(3);
+		expect(CRON_SCHEDULE.get(0)).toEqual({ name: "rss", kind: "ingestion", sourceType: "rss" });
+		expect(CRON_SCHEDULE.get(1)).toEqual({ name: "sam_gov", kind: "ingestion", sourceType: "sam_gov" });
+		expect(CRON_SCHEDULE.get(2)).toEqual({ name: "fpds", kind: "ingestion", sourceType: "fpds" });
 	});
 
-	it("ingestion jobs have sourceType matching name", () => {
-		for (const job of CRON_JOBS) {
-			if (job.kind === "ingestion") {
-				expect(job.sourceType).toBe(job.name);
-			}
+	it("all jobs are ingestion kind", () => {
+		for (const job of CRON_SCHEDULE.values()) {
+			expect(job.kind).toBe("ingestion");
 		}
 	});
 
-	it("does not include sam_gov_apbi as a separate job", () => {
-		const job = CRON_JOBS.find((j) => j.name === "sam_gov_apbi");
-		expect(job).toBeUndefined();
-	});
-
-	it("entity_resolution job has kind resolution", () => {
-		const job = CRON_JOBS.find((j) => j.name === "entity_resolution");
-		expect(job).toBeDefined();
-		expect(job!.kind).toBe("resolution");
-	});
-
-	it("synthesis job has kind synthesis", () => {
-		const job = CRON_JOBS.find((j) => j.name === "synthesis");
-		expect(job).toBeDefined();
-		expect(job!.kind).toBe("synthesis");
-	});
-
-	it("enrichment job has kind enrichment", () => {
-		const job = CRON_JOBS.find((j) => j.name === "enrichment");
-		expect(job).toBeDefined();
-		expect(job!.kind).toBe("enrichment");
+	it("does not include resolution, synthesis, enrichment, or materialization", () => {
+		const names = [...CRON_SCHEDULE.values()].map((j) => j.name);
+		expect(names).not.toContain("entity_resolution");
+		expect(names).not.toContain("synthesis");
+		expect(names).not.toContain("enrichment");
+		expect(names).not.toContain("signal_materialization");
 	});
 });
 
 describe("getScheduledJob", () => {
-	it("returns rss at hour 0", () => {
-		expect(getScheduledJob(0).name).toBe("rss");
+	it("returns rss at hour 0 (midnight UTC)", () => {
+		const job = getScheduledJob(0);
+		expect(job).not.toBeNull();
+		expect(job!.name).toBe("rss");
 	});
 
 	it("returns sam_gov at hour 1", () => {
-		expect(getScheduledJob(1).name).toBe("sam_gov");
+		const job = getScheduledJob(1);
+		expect(job).not.toBeNull();
+		expect(job!.name).toBe("sam_gov");
 	});
 
 	it("returns fpds at hour 2", () => {
-		expect(getScheduledJob(2).name).toBe("fpds");
+		const job = getScheduledJob(2);
+		expect(job).not.toBeNull();
+		expect(job!.name).toBe("fpds");
 	});
 
-	it("returns entity_resolution at hour 3", () => {
-		expect(getScheduledJob(3).name).toBe("entity_resolution");
-	});
-
-	it("returns synthesis at hour 4", () => {
-		expect(getScheduledJob(4).name).toBe("synthesis");
-	});
-
-	it("returns enrichment at hour 5", () => {
-		expect(getScheduledJob(5).name).toBe("enrichment");
-	});
-
-	it("cycles back to rss at hour 6", () => {
-		expect(getScheduledJob(6).name).toBe("rss");
-	});
-
-	it("cycles through all 24 hours correctly", () => {
-		const expected = ["rss", "sam_gov", "fpds", "entity_resolution", "synthesis", "enrichment"];
-		for (let hour = 0; hour < 24; hour++) {
-			expect(getScheduledJob(hour).name).toBe(expected[hour % 6]);
-		}
+	it("returns null for hours outside the schedule", () => {
+		expect(getScheduledJob(3)).toBeNull();
+		expect(getScheduledJob(12)).toBeNull();
+		expect(getScheduledJob(23)).toBeNull();
 	});
 });

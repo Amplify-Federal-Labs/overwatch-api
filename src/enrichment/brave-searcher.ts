@@ -46,7 +46,7 @@ export class BraveSearcher {
 
 		const url = `https://api.search.brave.com/res/v1/web/search?${params}`;
 
-		this.logger?.info("Brave search request", { query, url });
+		this.logger?.debug("Brave search request", { query, url });
 
 		try {
 			const response = await this.fetchFn(url, {
@@ -64,7 +64,7 @@ export class BraveSearcher {
 			const data = await response.json() as BraveApiResponse;
 			const rawResults = data?.web?.results ?? [];
 
-			this.logger?.info("Brave search raw results", {
+			this.logger?.debug("Brave search raw results", {
 				query,
 				rawCount: rawResults.length,
 				rawUrls: rawResults.map((r) => r.url),
@@ -72,7 +72,7 @@ export class BraveSearcher {
 
 			const filtered = rawResults.filter((r) => !isBlockedUrl(r.url));
 
-			this.logger?.info("Brave search after filtering blocked domains", {
+			this.logger?.debug("Brave search after filtering blocked domains", {
 				query,
 				filteredCount: filtered.length,
 				blockedCount: rawResults.length - filtered.length,

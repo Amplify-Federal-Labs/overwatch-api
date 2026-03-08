@@ -1,9 +1,9 @@
 import { drizzle } from "drizzle-orm/d1";
 import { eq, desc, sql } from "drizzle-orm";
-import { signals, observations, observationEntities } from "./schema";
+import { ingestedItems, observations, observationEntities, signals } from "./schema";
 import type { SignalAnalysisInput, ObservationExtraction, EntityRef } from "../schemas";
 
-export function buildSignalRow(input: SignalAnalysisInput) {
+export function buildIngestedItemRow(input: SignalAnalysisInput) {
 	return {
 		id: crypto.randomUUID(),
 		sourceType: input.sourceType,
@@ -16,9 +16,9 @@ export function buildSignalRow(input: SignalAnalysisInput) {
 	};
 }
 
-export function buildObservationRow(signalId: string, obs: ObservationExtraction) {
+export function buildObservationRow(ingestedItemId: string, obs: ObservationExtraction) {
 	return {
-		signalId,
+		signalId: ingestedItemId,
 		type: obs.type,
 		summary: obs.summary,
 		attributes: obs.attributes ?? null,
@@ -43,12 +43,12 @@ export class ObservationRepository {
 		this.db = drizzle(d1);
 	}
 
-	async insertSignal(input: SignalAnalysisInput): Promise<string | null> {
+	async insertIngestedItem(input: SignalAnalysisInput): Promise<string | null> {
 		if (input.sourceLink) {
 			const existing = await this.db
-				.select({ id: signals.id })
-				.from(signals)
-				.where(eq(signals.sourceLink, input.sourceLink))
+				.select({ id: ingestedItems.id })
+				.from(ingestedItems)
+				.where(eq(ingestedItems.sourceLink, input.sourceLink))
 				.get();
 
 			if (existing) {
@@ -56,19 +56,19 @@ export class ObservationRepository {
 			}
 		}
 
-		const row = buildSignalRow(input);
-		await this.db.insert(signals).values(row).run();
+		const row = buildIngestedItemRow(input);
+		await this.db.insert(ingestedItems).values(row).run();
 		return row.id;
 	}
 
 	async insertObservations(
-		signalId: string,
+		ingestedItemId: string,
 		extractedObservations: ObservationExtraction[],
 	): Promise<number> {
 		let count = 0;
 
 		for (const obs of extractedObservations) {
-			const row = buildObservationRow(signalId, obs);
+			const row = buildObservationRow(ingestedItemId, obs);
 			const [inserted] = await this.db.insert(observations).values(row)
 				.returning({ id: observations.id });
 
@@ -85,20 +85,20 @@ export class ObservationRepository {
 		return count;
 	}
 
-	async signalExistsBySourceLink(sourceLink: string): Promise<boolean> {
+	async ingestedItemExistsBySourceLink(sourceLink: string): Promise<boolean> {
 		const existing = await this.db
-			.select({ id: signals.id })
-			.from(signals)
-			.where(eq(signals.sourceLink, sourceLink))
+			.select({ id: ingestedItems.id })
+			.from(ingestedItems)
+			.where(eq(ingestedItems.sourceLink, sourceLink))
 			.get();
 
 		return existing !== undefined;
 	}
 
-	async countSignals(): Promise<number> {
+	async countIngestedItems(): Promise<number> {
 		const result = await this.db
 			.select({ count: sql<number>`count(*)` })
-			.from(signals)
+			.from(ingestedItems)
 			.get();
 		return result?.count ?? 0;
 	}
@@ -111,12 +111,12 @@ export class ObservationRepository {
 		return result?.count ?? 0;
 	}
 
-	async countRecentSignals(sinceDaysAgo: number): Promise<number> {
+	async countRecentIngestedItems(sinceDaysAgo: number): Promise<number> {
 		const since = new Date(Date.now() - sinceDaysAgo * 24 * 60 * 60 * 1000).toISOString();
 		const result = await this.db
 			.select({ count: sql<number>`count(*)` })
-			.from(signals)
-			.where(sql`${signals.createdAt} >= ${since}`)
+			.from(ingestedItems)
+			.where(sql`${ingestedItems.createdAt} >= ${since}`)
 			.get();
 		return result?.count ?? 0;
 	}
@@ -140,29 +140,29 @@ export class ObservationRepository {
 		return result?.count ?? 0;
 	}
 
-	async findAllSignals() {
+	async findAllIngestedItems() {
 		return this.db
 			.select()
-			.from(signals)
-			.orderBy(desc(signals.createdAt))
+			.from(ingestedItems)
+			.orderBy(desc(ingestedItems.createdAt))
 			.all();
 	}
 
-	async findSignalsPaginated(limit: number, offset: number) {
+	async findIngestedItemsPaginated(limit: number, offset: number) {
 		return this.db
 			.select()
-			.from(signals)
-			.orderBy(desc(signals.createdAt))
+			.from(ingestedItems)
+			.orderBy(desc(ingestedItems.createdAt))
 			.limit(limit)
 			.offset(offset)
 			.all();
 	}
 
-	async findObservationsBySignalId(signalId: string) {
+	async findObservationsByIngestedItemId(ingestedItemId: string) {
 		const obs = await this.db
 			.select()
 			.from(observations)
-			.where(eq(observations.signalId, signalId))
+			.where(eq(observations.signalId, ingestedItemId))
 			.all();
 
 		const result = [];
@@ -226,22 +226,55 @@ export class ObservationRepository {
 		return result;
 	}
 
-	async findSignalsWithObservations() {
-		const allSignals = await this.findAllSignals();
+	async findUnmaterializedItems(limit: number) {
+		// Find ingested items that have observations but no materialized signal yet
+		const items = await this.db
+			.select({
+				id: ingestedItems.id,
+				sourceType: ingestedItems.sourceType,
+				sourceName: ingestedItems.sourceName,
+				sourceUrl: ingestedItems.sourceUrl,
+				sourceLink: ingestedItems.sourceLink,
+				content: ingestedItems.content,
+				sourceMetadata: ingestedItems.sourceMetadata,
+				createdAt: ingestedItems.createdAt,
+			})
+			.from(ingestedItems)
+			.where(
+				sql`${ingestedItems.id} IN (
+					SELECT DISTINCT ${observations.signalId} FROM ${observations}
+				) AND ${ingestedItems.id} NOT IN (
+					SELECT ${signals.ingestedItemId} FROM ${signals}
+				)`,
+			)
+			.orderBy(desc(ingestedItems.createdAt))
+			.limit(limit)
+			.all();
+
 		const result = [];
-		for (const signal of allSignals) {
-			const obs = await this.findObservationsBySignalId(signal.id);
-			result.push({ ...signal, observations: obs });
+		for (const item of items) {
+			const obs = await this.findObservationsByIngestedItemId(item.id);
+			result.push({ ...item, observations: obs });
 		}
 		return result;
 	}
 
-	async findSignalsWithObservationsPaginated(limit: number, offset: number) {
-		const paginatedSignals = await this.findSignalsPaginated(limit, offset);
+	async findIngestedItemsWithObservations() {
+		const allItems = await this.findAllIngestedItems();
 		const result = [];
-		for (const signal of paginatedSignals) {
-			const obs = await this.findObservationsBySignalId(signal.id);
-			result.push({ ...signal, observations: obs });
+		for (const item of allItems) {
+			const obs = await this.findObservationsByIngestedItemId(item.id);
+			result.push({ ...item, observations: obs });
+		}
+		return result;
+	}
+
+	async findIngestedItemsWithObservationsPaginated(limit: number, offset: number) {
+		const paginatedItems = await this.findIngestedItemsPaginated(limit, offset);
+		const result = [];
+		for (const item of paginatedItems) {
+			const obs = await this.findObservationsByIngestedItemId(item.id);
+			result.push({ ...item, observations: obs });
 		}
 		return result;
 	}

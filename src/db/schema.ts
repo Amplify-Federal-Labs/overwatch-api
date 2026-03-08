@@ -1,8 +1,9 @@
 import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { Dossier } from "../schemas/dossier";
+import type { MaterializedSignalEntity } from "../agents/signal-materializer";
 
-// Signals: simplified, just raw content + source metadata
-export const signals = sqliteTable("signals", {
+// Ingested items: raw content from external sources (FPDS, SAM.gov, RSS)
+export const ingestedItems = sqliteTable("ingested_items", {
 	id: text("id").primaryKey().notNull(),
 	sourceType: text("source_type").notNull(),
 	sourceName: text("source_name").notNull(),
@@ -13,10 +14,35 @@ export const signals = sqliteTable("signals", {
 	createdAt: text("created_at").notNull(),
 });
 
-// Observations: typed facts extracted from signals
+// Signals: materialized intelligence signals with computed fields
+export const signals = sqliteTable("signals", {
+	id: text("id").primaryKey().notNull(),
+	ingestedItemId: text("ingested_item_id").notNull().references(() => ingestedItems.id, { onDelete: "cascade" }),
+	title: text("title").notNull(),
+	summary: text("summary").notNull(),
+	date: text("date").notNull(),
+	branch: text("branch").notNull().default(""),
+	source: text("source").notNull(),
+	type: text("type").notNull(),
+	relevance: integer("relevance").notNull().default(0),
+	relevanceRationale: text("relevance_rationale").notNull().default(""),
+	tags: text("tags", { mode: "json" }).$type<string[]>(),
+	competencies: text("competencies", { mode: "json" }).$type<string[]>(),
+	play: text("play").default(""),
+	competitors: text("competitors", { mode: "json" }).$type<string[]>(),
+	vendors: text("vendors", { mode: "json" }).$type<string[]>(),
+	stakeholders: text("stakeholders", { mode: "json" }).$type<{ id: string; name: string }[]>(),
+	entities: text("entities", { mode: "json" }).$type<MaterializedSignalEntity[]>(),
+	sourceUrl: text("source_url").default(""),
+	sourceMetadata: text("source_metadata", { mode: "json" }).$type<Record<string, string>>(),
+	createdAt: text("created_at").notNull(),
+	updatedAt: text("updated_at").notNull(),
+});
+
+// Observations: typed facts extracted from ingested items
 export const observations = sqliteTable("observations", {
 	id: integer("id").primaryKey({ autoIncrement: true }).notNull(),
-	signalId: text("signal_id").notNull().references(() => signals.id, { onDelete: "cascade" }),
+	signalId: text("signal_id").notNull().references(() => ingestedItems.id, { onDelete: "cascade" }),
 	type: text("type").notNull(),
 	summary: text("summary").notNull(),
 	attributes: text("attributes", { mode: "json" }).$type<Record<string, string>>(),

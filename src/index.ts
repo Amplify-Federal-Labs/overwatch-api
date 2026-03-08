@@ -81,6 +81,8 @@ export { app };
 export { ObservationExtractorAgent } from "./agents/observation-extractor-agent";
 export { EntityResolverAgent } from "./agents/entity-resolver-agent";
 export { SynthesisAgent } from "./agents/synthesis-agent";
+export { SignalMaterializerAgent } from "./agents/signal-materializer-agent";
+export { EnrichmentAgent } from "./agents/enrichment-agent";
 
 // Export the Worker with fetch and scheduled handlers
 export default {
@@ -88,6 +90,7 @@ export default {
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
 		const hour = new Date(event.scheduledTime).getUTCHours();
 		const job = getScheduledJob(hour);
+		if (!job) return;
 		const logger = new Logger(env.LOG_LEVEL);
 		ctx.waitUntil(
 			runCronJob(job, env).then((result) => {

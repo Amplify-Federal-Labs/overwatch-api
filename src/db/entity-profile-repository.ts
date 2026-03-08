@@ -274,6 +274,33 @@ export class EntityProfileRepository {
 		return scores;
 	}
 
+	async findProfilesByIds(ids: string[]): Promise<{ id: string; type: string; canonicalName: string; summary: string | null }[]> {
+		if (ids.length === 0) return [];
+		return this.db
+			.select({
+				id: entityProfiles.id,
+				type: entityProfiles.type,
+				canonicalName: entityProfiles.canonicalName,
+				summary: entityProfiles.summary,
+			})
+			.from(entityProfiles)
+			.where(sql`${entityProfiles.id} IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`)
+			.all();
+	}
+
+	async findIngestedItemIdsByProfileIds(entityProfileIds: string[]): Promise<string[]> {
+		if (entityProfileIds.length === 0) return [];
+
+		const refs = await this.db
+			.select({ signalId: observations.signalId })
+			.from(observationEntities)
+			.innerJoin(observations, eq(observationEntities.observationId, observations.id))
+			.where(sql`${observationEntities.entityProfileId} IN (${sql.join(entityProfileIds.map((id) => sql`${id}`), sql`, `)})`)
+			.all();
+
+		return [...new Set(refs.map((r) => r.signalId))];
+	}
+
 	async upsertRelationship(
 		sourceEntityId: string,
 		targetEntityId: string,

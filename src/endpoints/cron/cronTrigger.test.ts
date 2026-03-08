@@ -6,12 +6,11 @@ import { CronTrigger } from "./cronTrigger";
 const mockRunCronJob = vi.fn();
 
 vi.mock("../../cron/scheduler", () => ({
-	CRON_JOBS: [
-		{ name: "fpds", kind: "ingestion", sourceType: "fpds" },
-		{ name: "rss", kind: "ingestion", sourceType: "rss" },
-		{ name: "entity_resolution", kind: "resolution" },
-		{ name: "synthesis", kind: "synthesis" },
-	],
+	CRON_SCHEDULE: new Map([
+		[0, { name: "rss", kind: "ingestion", sourceType: "rss" }],
+		[1, { name: "sam_gov", kind: "ingestion", sourceType: "sam_gov" }],
+		[2, { name: "fpds", kind: "ingestion", sourceType: "fpds" }],
+	]),
 	runCronJob: (...args: unknown[]) => mockRunCronJob(...args),
 }));
 

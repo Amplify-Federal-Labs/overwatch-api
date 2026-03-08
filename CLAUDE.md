@@ -47,10 +47,12 @@ overwatch-api/
 │   │   ├── mock-competitors.ts
 │   │   └── mock-drafts.ts
 │   ├── db/                                   # Database layer (Drizzle ORM + D1)
-│   │   ├── schema.ts                         # Drizzle schema (signals, signal_entities, discovered_entities, stakeholders)
-│   │   ├── signal-repository.ts              # Signal & entity CRUD
-│   │   ├── discovered-entity-repository.ts   # Discovered entities with status tracking
-│   │   └── stakeholder-repository.ts         # Stakeholder CRUD (D1 + mock variants)
+│   │   ├── schema.ts                         # Drizzle schema (ingested_items, signals, observations, entity_profiles, etc.)
+│   │   ├── observation-repository.ts          # Ingested items & observations CRUD
+│   │   ├── signal-repository.ts              # Materialized signals CRUD (with filtering)
+│   │   ├── entity-profile-repository.ts      # Entity profiles, aliases, resolution
+│   │   ├── synthesis-repository.ts           # Synthesis queries, insights
+│   │   └── enrichment-repository.ts          # Entity enrichment status tracking
 │   ├── signals/                              # Signal ingestion & analysis pipeline
 │   │   ├── signal-ingestor.ts                # Master orchestrator: fetch → analyze → match → store
 │   │   ├── signal-analyzer.ts                # AI analysis via Cloudflare Workers AI (CF_AIG)
@@ -71,7 +73,7 @@ overwatch-api/
 │   │   ├── page-fetcher.ts                   # Fetch & extract page text from search results
 │   │   └── dossier-extractor.ts              # AI extraction of person/agency dossiers
 │   ├── cron/
-│   │   └── scheduler.ts                      # Hourly cron: cycles through fpds, rss, sam_gov, sam_gov_apbi, enrichment, enrichFailed
+│   │   └── scheduler.ts                      # Daily cron (0 0-2 * * *): fixed-hour ingestion (0=rss, 1=sam_gov, 2=fpds)
 │   └── endpoints/
 │       ├── kpis/                             # GET /kpis
 │       ├── signals/                          # GET /signals (D1), POST /signals/analyze
@@ -83,7 +85,7 @@ overwatch-api/
 │       └── tasks/                            # CRUD /tasks (D1-backed, pre-existing)
 ├── tests/
 │   └── vitest.unit.config.mts               # Unit test config
-├── migrations/                               # D1 SQL migrations (0001–0008)
+├── migrations/                               # D1 SQL migrations (0001–0013)
 ├── wrangler.jsonc                            # Cloudflare Workers config (D1, cron triggers, AI binding)
 ├── worker-configuration.d.ts                 # Env type (DB, CF_AIG, BRAVE_SEARCH_API_KEY, SAM_GOV_API_KEY)
 └── package.json
@@ -137,27 +139,38 @@ Every endpoint extends `OpenAPIRoute` with Zod schema definitions for request/re
 ### Router Pattern
 Each endpoint group has a `router.ts` that creates a Hono sub-app, registers endpoints via Chanfana's `fromHono()`, and exports the router. The main `index.ts` mounts routers with `openapi.route("/path", router)`.
 
-### Signal Ingestion Pipeline
-The `SignalIngestor` orchestrates a multi-step pipeline:
-1. **Fetch** — Source-specific fetchers (FPDS, SAM.gov, RSS) pull raw data from government APIs and news feeds
-2. **Analyze** — `SignalAnalyzer` sends raw content to Cloudflare Workers AI, which returns structured analysis (type, branch, tags, competencies, relevance score, outreach play, extracted entities)
-3. **Match** — `StakeholderMatcher` matches extracted entities against existing stakeholders; discovers new entities (people/agencies with high confidence + high relevance)
-4. **Store** — `SignalRepository` persists signals, entities, and matches to D1
+### Evidence-Based Intelligence Pipeline (ADR-003)
+The system uses an evidence-based approach with 5 Cloudflare Agent Durable Objects, connected via a task-chained pipeline:
+
+1. **ObservationExtractorAgent** — Cron-triggered. Fetches raw content (FPDS, SAM.gov, RSS) → stores as `ingested_items` → AI extracts typed observations with entity mentions → queues EntityResolverAgent
+2. **EntityResolverAgent** — Task-chained. Batch resolves raw entity names to canonical `entity_profiles` via exact alias match + AI fuzzy matching → queues SynthesisAgent(`resolvedProfileIds`) + EnrichmentAgent(`newProfileIds`) in parallel
+3. **SynthesisAgent** — Task-chained. Receives explicit profile IDs, synthesizes observations into summaries, trajectories, relevance scores, and insights → queues SignalMaterializerAgent. Self-schedules remaining IDs (batch 25).
+4. **EnrichmentAgent** — Task-chained (parallel with Synthesis). Receives explicit new profile IDs, enriches via Brave Search → page fetch → AI dossier extraction. Self-schedules remaining IDs (batch 10).
+5. **SignalMaterializerAgent** — Task-chained (terminal). Materializes `signals` table rows from ingested items + observations + entity relevance scores. Self-schedules remaining items (batch 10).
+
+**Chaining mechanism**: Upstream agents call `targetAgent.queue("methodName", payload)` via the Cloudflare Agents [queue tasks API](https://developers.cloudflare.com/agents/api-reference/queue-tasks/). Tasks are FIFO, persisted to SQLite, survive restarts, and support retries. Payloads carry explicit profile/item IDs — agents don't query DB for "what needs processing". The upstream agent returns immediately after enqueuing.
+
+For the full processing lifecycle of an ingested item, see [docs/pipeline-processing-report.md](docs/pipeline-processing-report.md).
+
+### Signal Materialization (ADR-002)
+Raw ingested content is separate from what the UI sees as "signals":
+- `ingested_items` table: raw content from FPDS, SAM.gov, RSS (no analysis metadata)
+- `signals` table: materialized with `branch`, `type`, `relevance`, `tags`, `competitors`, `vendors`, `stakeholderIds`, `entities`
+- `GET /signals` queries the materialized table directly with DB-level filtering (branch, type, relevance) and sorting (relevance DESC)
+- Pure logic in `materializeSignal()` function, tested independently from the DO
 
 ### Entity Enrichment Pipeline
-Discovered entities are enriched asynchronously via cron:
+Entity profiles are enriched via task chaining. EntityResolverAgent passes newly created profile IDs to `EnrichmentAgent.queue("enrichProfiles", newProfileIds)`. Per profile:
 1. **Search** — `BraveSearcher` queries Brave Search with site filters (mil.gov, defense.gov, LinkedIn)
 2. **Fetch** — `PageFetcher` retrieves full page text from search results
-3. **Extract** — `DossierExtractor` uses AI to extract structured dossier data (name, title, org, branch, programs, education, career history)
-4. **Store** — Enriched data is saved to the stakeholders table; entity status updated to `enriched`
+3. **Extract** — `DossierExtractor` uses AI to extract structured dossier data
+4. **Store** — Enriched dossier saved to entity profile
 
-**USAspending.gov enrichment (planned):** Once a stakeholder is identified, query USAspending.gov API (no auth) to enrich their dossier with: award history for their agency/program, spending trends, which primes and subs operate in their space, and funding trajectory. USAspending is an enrichment source only — NOT a signal source (it consumes FPDS data with a lag). FPDS ATOM feed is the authoritative signal source for contract awards.
-
-### Cron Scheduling
-Cloudflare Workers cron trigger fires hourly (`0 * * * *`). The `scheduler` cycles through 6 jobs round-robin: `fpds`, `rss`, `sam_gov`, `sam_gov_apbi`, `enrichment`, `enrichFailed`. Jobs can also be triggered on-demand via `POST /cron/:jobName`.
+### Cron Scheduling (ADR-003)
+Cloudflare Workers cron fires once daily per source (`0 0-2 * * *`). Cron is **ingestion-only** with a fixed schedule: midnight UTC = RSS, 1 AM = SAM.gov, 2 AM = FPDS. All downstream processing (entity resolution, synthesis, enrichment, signal materialization) is triggered via task chaining after ingestion completes. Ingestion jobs can also be triggered on-demand via `POST /cron/:jobName`.
 
 ### Database (Drizzle + D1)
-Drizzle ORM provides type-safe access to D1. Key tables: `signals`, `signal_entities`, `discovered_entities`, `stakeholders`. Schema defined in `src/db/schema.ts`. Migrations in `migrations/` (0001–0008).
+Drizzle ORM provides type-safe access to D1. Key tables: `ingested_items`, `signals` (materialized), `observations`, `observation_entities`, `entity_profiles`, `entity_aliases`, `entity_relationships`, `insights`. Schema defined in `src/db/schema.ts`. Migrations in `migrations/` (0001–0013).
 
 ### ETag Caching
 Middleware in `src/middleware/etag.ts` computes SHA-256 of GET response bodies and returns `304 Not Modified` when the client sends a matching `If-None-Match` header.

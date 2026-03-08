@@ -4,7 +4,6 @@ import type { Dossier } from "../schemas";
 import type { Logger } from "../logger";
 
 export interface EnrichmentDeps {
-	findProfiles: () => Promise<ProfileForEnrichment[]>;
 	search: (name: string, type: string) => Promise<SearchResult[]>;
 	fetchPages: (urls: string[]) => Promise<string[]>;
 	extractDossier: (name: string, type: string, pages: string[]) => Promise<Dossier | null>;
@@ -19,7 +18,19 @@ export interface EnrichmentResult {
 	profilesEnriched: number;
 	profilesFailed: number;
 	profilesSkipped: number;
+	remainingProfileIds: string[];
 	startedAt: string;
+}
+
+const BATCH_SIZE = 10;
+
+/**
+ * Determines whether the enrichment agent should self-schedule another batch.
+ * Returns true only when there are remaining profiles AND the current batch
+ * made progress (enriched > 0) to avoid infinite loops on persistent errors.
+ */
+export function shouldSelfScheduleEnrichment(result: EnrichmentResult): boolean {
+	return result.remainingProfileIds.length > 0 && result.profilesEnriched > 0;
 }
 
 export class EntityEnricher {
@@ -29,25 +40,25 @@ export class EntityEnricher {
 		this.deps = deps;
 	}
 
-	async run(): Promise<EnrichmentResult> {
+	async run(profiles: ProfileForEnrichment[]): Promise<EnrichmentResult> {
 		const startedAt = new Date().toISOString();
 		const log = this.deps.logger;
 
-		log?.info("Starting enrichment run");
-
-		const profiles = await this.deps.findProfiles();
-		log?.info("Found profiles needing enrichment", { count: profiles.length });
+		log?.info("Starting enrichment run", { profileCount: profiles.length });
 
 		if (profiles.length === 0) {
 			log?.info("No profiles to enrich");
-			return { profilesProcessed: 0, profilesEnriched: 0, profilesFailed: 0, profilesSkipped: 0, startedAt };
+			return { profilesProcessed: 0, profilesEnriched: 0, profilesFailed: 0, profilesSkipped: 0, remainingProfileIds: [], startedAt };
 		}
+
+		const batch = profiles.slice(0, BATCH_SIZE);
+		const remainingProfileIds = profiles.slice(BATCH_SIZE).map((p) => p.id);
 
 		let profilesEnriched = 0;
 		let profilesFailed = 0;
 		let profilesSkipped = 0;
 
-		for (const profile of profiles) {
+		for (const profile of batch) {
 			try {
 				const result = await this.enrichProfile(profile);
 				switch (result) {
@@ -72,7 +83,7 @@ export class EntityEnricher {
 			}
 		}
 
-		const result = { profilesProcessed: profiles.length, profilesEnriched, profilesFailed, profilesSkipped, startedAt };
+		const result: EnrichmentResult = { profilesProcessed: batch.length, profilesEnriched, profilesFailed, profilesSkipped, remainingProfileIds, startedAt };
 		log?.info("Enrichment run complete", { ...result });
 		return result;
 	}

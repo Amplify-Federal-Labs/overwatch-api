@@ -51,8 +51,11 @@ export {
 } from "./draft";
 export {
 	OutreachPlaySchema,
+	CompetencyCodeEnum,
+	COMPETENCY_CLUSTERS,
 	CompetencyClusterSchema,
 	type OutreachPlay,
+	type CompetencyCode,
 	type CompetencyCluster,
 } from "./constants";
 export {
@@ -86,18 +89,13 @@ export {
 	type Insight,
 } from "./insight";
 export {
-	SignalFeedItemSchema,
-	ObservationResponseSchema,
-	ObservationEntityRefResponseSchema,
-	type SignalFeedItem,
-} from "./signal-feed";
-export {
 	SignalTypeEnum,
 	SignalEntitySchema,
-	SignalViewSchema,
+	SignalStakeholderSchema,
+	SignalSchema,
 	type SignalType,
-	type SignalView,
-} from "./signal-view";
+	type Signal,
+} from "./signal-feed";
 export {
 	PersonDossierSchema,
 	AgencyDossierSchema,
