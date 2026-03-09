@@ -23,6 +23,7 @@ export interface EnrichmentResult {
 }
 
 const BATCH_SIZE = 10;
+const ENRICHABLE_TYPES = new Set(["person", "agency", "company"]);
 
 /**
  * Determines whether the enrichment agent should self-schedule another batch.
@@ -95,6 +96,12 @@ export class EntityEnricher {
 
 		log?.info("Enriching profile", { profileId: profile.id, name: profile.canonicalName, type: profile.type });
 
+		if (!ENRICHABLE_TYPES.has(profile.type)) {
+			log?.info("Skipping non-enrichable entity type", { profileId: profile.id, type: profile.type });
+			await this.deps.markSkipped(profile.id);
+			return "skipped";
+		}
+
 		const searchResults = await this.deps.search(profile.canonicalName, profile.type, profile.context);
 		log?.info("Search results", {
 			profileId: profile.id,
@@ -141,8 +148,7 @@ export class EntityEnricher {
 			profileId: profile.id,
 			name: profile.canonicalName,
 			kind: dossier.kind,
-			branch: dossier.branch,
-			programs: dossier.programs,
+			...(dossier.kind !== "company" && { branch: dossier.branch, programs: dossier.programs }),
 		});
 
 		await this.deps.saveDossier(profile.id, dossier);

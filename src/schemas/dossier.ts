@@ -30,9 +30,21 @@ export const AgencyDossierSchema = z.object({
 });
 export type AgencyDossier = z.infer<typeof AgencyDossierSchema>;
 
+export const CompanyDossierSchema = z.object({
+	kind: z.literal("company"),
+	description: z.string(),
+	coreCapabilities: z.array(z.string()),
+	keyContracts: z.array(z.string()),
+	keyCustomers: z.array(z.string()),
+	leadership: z.array(z.string()),
+	headquarters: z.string(),
+});
+export type CompanyDossier = z.infer<typeof CompanyDossierSchema>;
+
 export const DossierSchema = z.discriminatedUnion("kind", [
 	PersonDossierSchema,
 	AgencyDossierSchema,
+	CompanyDossierSchema,
 ]);
 export type Dossier = z.infer<typeof DossierSchema>;
 

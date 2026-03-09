@@ -199,6 +199,23 @@ describe("EntityEnricher", () => {
 		expect(deps.search).toHaveBeenCalledWith("Michael T. Geegan", "person", context);
 	});
 
+	it("skips non-enrichable entity types like program", async () => {
+		const programProfile: ProfileForEnrichment = {
+			id: "p-prog",
+			type: "program",
+			canonicalName: "W912DQ20D3010",
+		};
+
+		const deps = makeDeps();
+		const enricher = new EntityEnricher(deps);
+		const result = await enricher.run([programProfile]);
+
+		expect(result.profilesProcessed).toBe(1);
+		expect(result.profilesSkipped).toBe(1);
+		expect(deps.search).not.toHaveBeenCalled();
+		expect(deps.markSkipped).toHaveBeenCalledWith("p-prog");
+	});
+
 	it("returns empty remainingProfileIds when all profiles fit in batch", async () => {
 		const profiles: ProfileForEnrichment[] = Array.from({ length: 5 }, (_, i) => ({
 			id: `p-${i}`,

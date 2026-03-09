@@ -99,10 +99,12 @@ export {
 export {
 	PersonDossierSchema,
 	AgencyDossierSchema,
+	CompanyDossierSchema,
 	DossierSchema,
 	EnrichmentStatusEnum,
 	type PersonDossier,
 	type AgencyDossier,
+	type CompanyDossier,
 	type Dossier,
 	type EnrichmentStatus,
 } from "./dossier";

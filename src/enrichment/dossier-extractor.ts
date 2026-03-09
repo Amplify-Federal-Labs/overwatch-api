@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { jsonrepair } from "jsonrepair";
-import type { Dossier, PersonDossier, AgencyDossier } from "../schemas";
+import type { Dossier, PersonDossier, AgencyDossier, CompanyDossier } from "../schemas";
 
 const PERSON_PROMPT = `You are an intelligence analyst building a dossier on a government/defense person. Given web page text about this person, extract structured profile data.
 
@@ -33,6 +33,22 @@ Return JSON:
   "parentOrg": "Parent organization",
   "leadership": ["Names of key leaders"],
   "focusAreas": ["Technology or mission areas"]
+}
+
+Extract ONLY what is explicitly stated. Use empty arrays/strings for missing data. Do not fabricate.
+Return ONLY valid JSON. No markdown fences, no commentary.`;
+
+const COMPANY_PROMPT = `You are an intelligence analyst building a dossier on a defense/government contractor company. Given web page text about this company, extract structured profile data.
+
+Return JSON:
+{
+  "kind": "company",
+  "description": "One-sentence description of what the company does",
+  "coreCapabilities": ["Key service areas or capabilities"],
+  "keyContracts": ["Notable government contracts"],
+  "keyCustomers": ["Government agencies they serve"],
+  "leadership": ["Names and titles of key leaders"],
+  "headquarters": "City, State"
 }
 
 Extract ONLY what is explicitly stated. Use empty arrays/strings for missing data. Do not fabricate.
@@ -89,6 +105,18 @@ function validateAgencyDossier(obj: Record<string, unknown>): AgencyDossier {
 	};
 }
 
+function validateCompanyDossier(obj: Record<string, unknown>): CompanyDossier {
+	return {
+		kind: "company",
+		description: typeof obj.description === "string" ? obj.description : "",
+		coreCapabilities: Array.isArray(obj.coreCapabilities) ? obj.coreCapabilities.filter((c): c is string => typeof c === "string") : [],
+		keyContracts: Array.isArray(obj.keyContracts) ? obj.keyContracts.filter((c): c is string => typeof c === "string") : [],
+		keyCustomers: Array.isArray(obj.keyCustomers) ? obj.keyCustomers.filter((c): c is string => typeof c === "string") : [],
+		leadership: Array.isArray(obj.leadership) ? obj.leadership.filter((l): l is string => typeof l === "string") : [],
+		headquarters: typeof obj.headquarters === "string" ? obj.headquarters : "",
+	};
+}
+
 export function parseDossierResponse(raw: string, entityType: string): Dossier | null {
 	if (!raw) return null;
 
@@ -102,17 +130,24 @@ export function parseDossierResponse(raw: string, entityType: string): Dossier |
 	if (typeof parsed !== "object" || parsed === null) return null;
 	const obj = parsed as Record<string, unknown>;
 
+	// Map entityType to expected dossier kind
+	const kindMap: Record<string, string> = { person: "person", agency: "agency", company: "company" };
+	const expectedKind = kindMap[entityType] ?? entityType;
+
 	// If AI didn't set kind, infer from entityType
-	const kind = typeof obj.kind === "string" ? obj.kind : entityType;
+	const kind = typeof obj.kind === "string" ? obj.kind : expectedKind;
 
 	// Verify kind matches expected entityType
-	const expectedKind = entityType === "person" ? "person" : "agency";
 	if (kind !== expectedKind) return null;
 
-	if (kind === "person") {
-		return validatePersonDossier(obj);
+	switch (kind) {
+		case "person":
+			return validatePersonDossier(obj);
+		case "company":
+			return validateCompanyDossier(obj);
+		default:
+			return validateAgencyDossier(obj);
 	}
-	return validateAgencyDossier(obj);
 }
 
 export class DossierExtractor {
@@ -131,7 +166,8 @@ export class DossierExtractor {
 		if (pageTexts.length === 0) return null;
 
 		const combinedText = pageTexts.join("\n\n---\n\n").slice(0, 8000);
-		const systemPrompt = entityType === "person" ? PERSON_PROMPT : AGENCY_PROMPT;
+		const promptMap: Record<string, string> = { person: PERSON_PROMPT, company: COMPANY_PROMPT };
+		const systemPrompt = promptMap[entityType] ?? AGENCY_PROMPT;
 
 		const response = await this.client.chat.completions.create({
 			model: `workers-ai/${this.model}`,

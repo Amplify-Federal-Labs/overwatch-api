@@ -24,8 +24,8 @@ export function transformEntityToStakeholder(profile: EntityProfileWithDetails):
 
 	const title = dossier?.kind === "person" ? dossier.title : "";
 	const org = dossier?.kind === "person" ? dossier.org : "";
-	const branch = dossier ? dossier.branch : "";
-	const programs = dossier ? dossier.programs : [];
+	const branch = dossier && dossier.kind !== "company" ? dossier.branch : "";
+	const programs = dossier && dossier.kind !== "company" ? dossier.programs : [];
 
 	const militaryBio = dossier?.kind === "person" && dossier.rank
 		? {

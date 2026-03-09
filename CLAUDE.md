@@ -71,7 +71,7 @@ overwatch-api/
 │   │   ├── entity-enricher.ts                # Orchestrator: search → fetch pages → extract dossier
 │   │   ├── brave-searcher.ts                 # Brave Search API (mil.gov, defense.gov, LinkedIn filters)
 │   │   ├── page-fetcher.ts                   # Fetch & extract page text from search results
-│   │   └── dossier-extractor.ts              # AI extraction of person/agency dossiers
+│   │   └── dossier-extractor.ts              # AI extraction of person/agency/company dossiers
 │   ├── cron/
 │   │   └── scheduler.ts                      # Daily cron (0 0-2 * * *): fixed-hour ingestion (0=rss, 1=sam_gov, 2=fpds)
 │   └── endpoints/
@@ -160,14 +160,21 @@ Raw ingested content is separate from what the UI sees as "signals":
 - Pure logic in `materializeSignal()` function, tested independently from the DO
 
 ### Entity Enrichment Pipeline
-Entity profiles are enriched via task chaining. EntityResolverAgent passes newly created profile IDs to `EnrichmentAgent.queue("enrichProfiles", newProfileIds)`. Per profile:
-1. **Search** — `BraveSearcher` queries Brave Search with site filters (mil.gov, defense.gov, LinkedIn)
+Entity profiles are enriched via task chaining. EntityResolverAgent passes newly created profile IDs to `EnrichmentAgent.queue("enrichProfiles", newProfileIds)`. Can also be triggered on-demand via `POST /cron/enrichment` (queries DB for all `pending` profiles). Only enrichable entity types (`person`, `agency`, `company`) are processed — other types (`program`, `contract_vehicle`, `technology`) are automatically skipped.
+
+Per profile:
+1. **Search** — `BraveSearcher` queries Brave Search with context-aware queries (uses co-occurring entities from observations to build better search terms, e.g. `"Michael T. Geegan" "Department of the Army"` instead of generic `Michael T. Geegan defense government official`)
 2. **Fetch** — `PageFetcher` retrieves full page text from search results
-3. **Extract** — `DossierExtractor` uses AI to extract structured dossier data
+3. **Extract** — `DossierExtractor` uses AI to extract structured dossier data (person, agency, or company dossier based on entity type)
 4. **Store** — Enriched dossier saved to entity profile
 
+**Dossier types** (discriminated union on `kind`):
+- `PersonDossier` — title, org, branch, programs, rank, education, careerHistory, focusAreas, decorations
+- `AgencyDossier` — mission, branch, programs, parentOrg, leadership, focusAreas
+- `CompanyDossier` — description, coreCapabilities, keyContracts, keyCustomers, leadership, headquarters
+
 ### Cron Scheduling (ADR-003)
-Cloudflare Workers cron fires once daily per source (`0 0-2 * * *`). Cron is **ingestion-only** with a fixed schedule: midnight UTC = RSS, 1 AM = SAM.gov, 2 AM = FPDS. All downstream processing (entity resolution, synthesis, enrichment, signal materialization) is triggered via task chaining after ingestion completes. Ingestion jobs can also be triggered on-demand via `POST /cron/:jobName`.
+Cloudflare Workers cron fires once daily per source (`0 0-2 * * *`). Cron is **ingestion-only** with a fixed schedule: midnight UTC = RSS, 1 AM = SAM.gov, 2 AM = FPDS. All downstream processing (entity resolution, synthesis, enrichment, signal materialization) is triggered via task chaining after ingestion completes. Jobs can also be triggered on-demand via `POST /cron/:jobName`. Available on-demand jobs: `rss`, `sam_gov`, `fpds` (ingestion), `entity_resolution`, `synthesis`, `enrichment`, `signal_materialization` (agents).
 
 ### Database (Drizzle + D1)
 Drizzle ORM provides type-safe access to D1. Key tables: `ingested_items`, `signals` (materialized), `observations`, `observation_entities`, `entity_profiles`, `entity_aliases`, `entity_relationships`, `insights`. Schema defined in `src/db/schema.ts`. Migrations in `migrations/` (0001–0013).

@@ -83,6 +83,15 @@ export class EnrichmentRepository {
 		this.db = drizzle(d1);
 	}
 
+	async findPendingProfileIds(): Promise<string[]> {
+		const rows = await this.db
+			.select({ id: entityProfiles.id })
+			.from(entityProfiles)
+			.where(eq(entityProfiles.enrichmentStatus, "pending"))
+			.all();
+		return rows.map((r) => r.id);
+	}
+
 	async findProfilesByIds(ids: string[]): Promise<ProfileForEnrichment[]> {
 		if (ids.length === 0) return [];
 		return this.db

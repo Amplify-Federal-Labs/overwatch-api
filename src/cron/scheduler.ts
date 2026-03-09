@@ -3,6 +3,7 @@ import type { ObservationExtractorAgent } from "../agents/observation-extractor-
 import type { EntityResolverAgent } from "../agents/entity-resolver-agent";
 import type { SynthesisAgent } from "../agents/synthesis-agent";
 import type { SignalMaterializerAgent } from "../agents/signal-materializer-agent";
+import type { EnrichmentAgent } from "../agents/enrichment-agent";
 
 import type { SignalSourceType } from "../schemas";
 
@@ -15,7 +16,7 @@ export interface IngestionJob {
 export interface AgentJob {
 	name: string;
 	kind: "agent";
-	agentName: "entity_resolution" | "synthesis" | "signal_materialization";
+	agentName: "entity_resolution" | "synthesis" | "signal_materialization" | "enrichment";
 }
 
 export type CronJob = IngestionJob | AgentJob;
@@ -30,6 +31,7 @@ export const ON_DEMAND_JOBS: ReadonlyMap<string, AgentJob> = new Map([
 	["entity_resolution", { name: "entity_resolution", kind: "agent", agentName: "entity_resolution" }],
 	["synthesis", { name: "synthesis", kind: "agent", agentName: "synthesis" }],
 	["signal_materialization", { name: "signal_materialization", kind: "agent", agentName: "signal_materialization" }],
+	["enrichment", { name: "enrichment", kind: "agent", agentName: "enrichment" }],
 ]);
 
 export function getScheduledJob(utcHour: number): CronJob | null {
@@ -77,6 +79,16 @@ export async function runCronJob(job: CronJob, env: Env): Promise<unknown> {
 				"singleton",
 			);
 			return agent.materializeNew();
+		}
+		case "enrichment": {
+			const agent = await getAgentByName<Env, EnrichmentAgent>(
+				env.ENRICHMENT as unknown as DurableObjectNamespace<EnrichmentAgent>,
+				"singleton",
+			);
+			const { EnrichmentRepository } = await import("../db/enrichment-repository");
+			const repo = new EnrichmentRepository(env.DB);
+			const pendingIds = await repo.findPendingProfileIds();
+			return agent.enrichProfiles(pendingIds);
 		}
 	}
 }

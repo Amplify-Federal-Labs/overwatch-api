@@ -99,6 +99,48 @@ describe("parseDossierResponse", () => {
 		}
 	});
 
+	it("parses a valid company dossier", () => {
+		const raw = JSON.stringify({
+			kind: "company",
+			description: "Defense IT services provider",
+			coreCapabilities: ["Cybersecurity", "Cloud Migration"],
+			keyContracts: ["DISA EMSS"],
+			keyCustomers: ["DISA", "Army"],
+			leadership: ["CEO Jane Doe"],
+			headquarters: "McLean, VA",
+		});
+
+		const result = parseDossierResponse(raw, "company");
+
+		expect(result).not.toBeNull();
+		expect(result!.kind).toBe("company");
+		if (result!.kind === "company") {
+			expect(result!.description).toBe("Defense IT services provider");
+			expect(result!.coreCapabilities).toEqual(["Cybersecurity", "Cloud Migration"]);
+			expect(result!.keyContracts).toEqual(["DISA EMSS"]);
+			expect(result!.keyCustomers).toEqual(["DISA", "Army"]);
+			expect(result!.leadership).toEqual(["CEO Jane Doe"]);
+			expect(result!.headquarters).toBe("McLean, VA");
+		}
+	});
+
+	it("fills missing optional fields with defaults for company", () => {
+		const raw = JSON.stringify({
+			kind: "company",
+			description: "IT contractor",
+		});
+
+		const result = parseDossierResponse(raw, "company");
+		expect(result).not.toBeNull();
+		if (result?.kind === "company") {
+			expect(result.coreCapabilities).toEqual([]);
+			expect(result.keyContracts).toEqual([]);
+			expect(result.keyCustomers).toEqual([]);
+			expect(result.leadership).toEqual([]);
+			expect(result.headquarters).toBe("");
+		}
+	});
+
 	it("fills missing optional fields with defaults for agency", () => {
 		const raw = JSON.stringify({
 			kind: "agency",

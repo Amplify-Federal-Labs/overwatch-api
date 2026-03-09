@@ -56,11 +56,12 @@ describe("getScheduledJob", () => {
 });
 
 describe("ON_DEMAND_JOBS", () => {
-	it("has three agent jobs", () => {
-		expect(ON_DEMAND_JOBS.size).toBe(3);
+	it("has four agent jobs", () => {
+		expect(ON_DEMAND_JOBS.size).toBe(4);
 		expect(ON_DEMAND_JOBS.get("entity_resolution")).toEqual({ name: "entity_resolution", kind: "agent", agentName: "entity_resolution" });
 		expect(ON_DEMAND_JOBS.get("synthesis")).toEqual({ name: "synthesis", kind: "agent", agentName: "synthesis" });
 		expect(ON_DEMAND_JOBS.get("signal_materialization")).toEqual({ name: "signal_materialization", kind: "agent", agentName: "signal_materialization" });
+		expect(ON_DEMAND_JOBS.get("enrichment")).toEqual({ name: "enrichment", kind: "agent", agentName: "enrichment" });
 	});
 });
 
@@ -75,10 +76,10 @@ describe("findJobByName", () => {
 		expect(findJobByName("entity_resolution")?.kind).toBe("agent");
 		expect(findJobByName("synthesis")?.kind).toBe("agent");
 		expect(findJobByName("signal_materialization")?.kind).toBe("agent");
+		expect(findJobByName("enrichment")?.kind).toBe("agent");
 	});
 
 	it("returns null for unknown job names", () => {
 		expect(findJobByName("unknown")).toBeNull();
-		expect(findJobByName("enrichment")).toBeNull();
 	});
 });
