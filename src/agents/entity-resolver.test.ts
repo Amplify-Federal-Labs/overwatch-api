@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EntityResolver, type EntityMatchResult } from "./entity-resolver";
 import type { UnresolvedGroup } from "../db/entity-profile-repository";
 
-function makeResolver(aiMatchFn?: (name: string, candidates: string[]) => Promise<EntityMatchResult>) {
+function makeResolver(aiMatchFn?: (name: string, candidates: string[], entityType: string) => Promise<EntityMatchResult>) {
 	const matchFn = aiMatchFn ?? (async () => ({ match: null }));
 	return new EntityResolver(matchFn);
 }
@@ -67,7 +67,7 @@ describe("EntityResolver.resolveGroup", () => {
 		expect(result.profileId).toBe("profile-2");
 		expect(result.isNew).toBe(false);
 		expect(result.matchMethod).toBe("ai_fuzzy");
-		expect(aiMatch).toHaveBeenCalledWith("Booz Allen", ["profile-2:Booz Allen Hamilton"]);
+		expect(aiMatch).toHaveBeenCalledWith("Booz Allen", ["profile-2:Booz Allen Hamilton"], "company");
 	});
 
 	it("creates new profile when AI returns no match", async () => {
@@ -113,6 +113,6 @@ describe("EntityResolver.resolveGroup", () => {
 		const result = await resolver.resolveGroup(group, existingProfiles);
 
 		// AI should only see company candidates
-		expect(aiMatch).toHaveBeenCalledWith("Booz Allen Hamilton", ["profile-2:SAIC"]);
+		expect(aiMatch).toHaveBeenCalledWith("Booz Allen Hamilton", ["profile-2:SAIC"], "company");
 	});
 });

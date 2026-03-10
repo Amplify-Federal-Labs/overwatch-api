@@ -131,6 +131,31 @@ export class ObservationRepository {
 		return result?.count ?? 0;
 	}
 
+	async countObservationEntities(): Promise<number> {
+		const result = await this.db
+			.select({ count: sql<number>`count(*)` })
+			.from(observationEntities)
+			.get();
+		return result?.count ?? 0;
+	}
+
+	async countIngestedItemsBySource(): Promise<Record<string, number>> {
+		const rows = await this.db
+			.select({
+				sourceType: ingestedItems.sourceType,
+				count: sql<number>`count(*)`,
+			})
+			.from(ingestedItems)
+			.groupBy(ingestedItems.sourceType)
+			.all();
+
+		const result: Record<string, number> = {};
+		for (const row of rows) {
+			result[row.sourceType] = row.count;
+		}
+		return result;
+	}
+
 	async countCompanyObservations(): Promise<number> {
 		const result = await this.db
 			.select({ count: sql<number>`count(DISTINCT ${observationEntities.observationId})` })

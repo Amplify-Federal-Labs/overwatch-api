@@ -18,7 +18,7 @@ interface ProfileWithAliases {
 	aliases: string[];
 }
 
-export type AiMatchFn = (name: string, candidates: string[]) => Promise<EntityMatchResult>;
+export type AiMatchFn = (name: string, candidates: string[], entityType: string) => Promise<EntityMatchResult>;
 
 export class EntityResolver {
 	private aiMatch: AiMatchFn;
@@ -43,7 +43,7 @@ export class EntityResolver {
 		// Step 2: AI fuzzy match (only if there are candidates)
 		if (sameTypeProfiles.length > 0) {
 			const candidates = sameTypeProfiles.map((p) => `${p.id}:${p.canonicalName}`);
-			const aiResult = await this.aiMatch(group.mostCommonRawName, candidates);
+			const aiResult = await this.aiMatch(group.mostCommonRawName, candidates, group.entityType);
 
 			if (aiResult.match) {
 				return { profileId: aiResult.match, isNew: false, matchMethod: "ai_fuzzy" };

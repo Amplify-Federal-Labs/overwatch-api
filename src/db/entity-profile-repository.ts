@@ -122,6 +122,66 @@ export class EntityProfileRepository {
 		return result?.count ?? 0;
 	}
 
+	async countAliases(): Promise<number> {
+		const result = await this.db
+			.select({ count: sql<number>`count(*)` })
+			.from(entityAliases)
+			.get();
+		return result?.count ?? 0;
+	}
+
+	async countProfilesByTypeBreakdown(): Promise<Record<string, number>> {
+		const rows = await this.db
+			.select({
+				type: entityProfiles.type,
+				count: sql<number>`count(*)`,
+			})
+			.from(entityProfiles)
+			.groupBy(entityProfiles.type)
+			.all();
+
+		const result: Record<string, number> = {};
+		for (const row of rows) {
+			result[row.type] = row.count;
+		}
+		return result;
+	}
+
+	async countByEnrichmentStatus(): Promise<Record<string, number>> {
+		const rows = await this.db
+			.select({
+				status: entityProfiles.enrichmentStatus,
+				count: sql<number>`count(*)`,
+			})
+			.from(entityProfiles)
+			.groupBy(entityProfiles.enrichmentStatus)
+			.all();
+
+		const result: Record<string, number> = {};
+		for (const row of rows) {
+			result[row.status] = row.count;
+		}
+		return result;
+	}
+
+	async countSynthesized(): Promise<number> {
+		const result = await this.db
+			.select({ count: sql<number>`count(*)` })
+			.from(entityProfiles)
+			.where(sql`${entityProfiles.lastSynthesizedAt} IS NOT NULL`)
+			.get();
+		return result?.count ?? 0;
+	}
+
+	async countWithDossier(): Promise<number> {
+		const result = await this.db
+			.select({ count: sql<number>`count(*)` })
+			.from(entityProfiles)
+			.where(sql`${entityProfiles.dossier} IS NOT NULL`)
+			.get();
+		return result?.count ?? 0;
+	}
+
 	async findUnresolvedEntities(): Promise<UnresolvedEntity[]> {
 		const rows = await this.db
 			.select({
@@ -236,6 +296,17 @@ export class EntityProfileRepository {
 	async findProfilesWithSignalIds() {
 		const profiles = await this.db.select().from(entityProfiles).all();
 		return this.attachSignalIds(profiles);
+	}
+
+	async findProfileWithSignalIdsById(id: string) {
+		const profile = await this.db
+			.select()
+			.from(entityProfiles)
+			.where(eq(entityProfiles.id, id))
+			.get();
+		if (!profile) return null;
+		const [result] = await this.attachSignalIds([profile]);
+		return result;
 	}
 
 	async findProfilesWithSignalIdsPaginated(

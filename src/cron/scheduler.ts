@@ -19,9 +19,14 @@ export interface AgentJob {
 	agentName: "entity_resolution" | "synthesis" | "signal_materialization" | "enrichment";
 }
 
-export type CronJob = IngestionJob | AgentJob;
+export interface RecoveryJob {
+	name: "recovery";
+	kind: "recovery";
+}
 
-export const CRON_SCHEDULE: ReadonlyMap<number, CronJob> = new Map([
+export type CronJob = IngestionJob | AgentJob | RecoveryJob;
+
+export const INGESTION_SCHEDULE: ReadonlyMap<number, IngestionJob> = new Map([
 	[0, { name: "rss", kind: "ingestion", sourceType: "rss" }],
 	[1, { name: "sam_gov", kind: "ingestion", sourceType: "sam_gov" }],
 	[2, { name: "fpds", kind: "ingestion", sourceType: "fpds" }],
@@ -34,18 +39,29 @@ export const ON_DEMAND_JOBS: ReadonlyMap<string, AgentJob> = new Map([
 	["enrichment", { name: "enrichment", kind: "agent", agentName: "enrichment" }],
 ]);
 
-export function getScheduledJob(utcHour: number): CronJob | null {
-	return CRON_SCHEDULE.get(utcHour) ?? null;
+const RECOVERY_JOB: RecoveryJob = { name: "recovery", kind: "recovery" };
+
+export function getScheduledJob(utcHour: number): CronJob {
+	return INGESTION_SCHEDULE.get(utcHour) ?? RECOVERY_JOB;
 }
 
 export function findJobByName(name: string): CronJob | null {
-	for (const job of CRON_SCHEDULE.values()) {
+	if (name === "recovery") return RECOVERY_JOB;
+	for (const job of INGESTION_SCHEDULE.values()) {
 		if (job.name === name) return job;
 	}
 	return ON_DEMAND_JOBS.get(name) ?? null;
 }
 
 export async function runCronJob(job: CronJob, env: Env): Promise<unknown> {
+	if (job.kind === "recovery") {
+		const { RecoveryRepository } = await import("./recovery-repository");
+		const { runRecovery } = await import("./run-recovery");
+		const repo = new RecoveryRepository(env.DB);
+		const status = await repo.getPipelineStatus();
+		return runRecovery(env, status);
+	}
+
 	if (job.kind === "ingestion") {
 		const agent = await getAgentByName<Env, ObservationExtractorAgent>(
 			env.OBSERVATION_EXTRACTOR as unknown as DurableObjectNamespace<ObservationExtractorAgent>,

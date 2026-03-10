@@ -10,6 +10,7 @@ import { interactionsRouter } from "./endpoints/interactions/router";
 import { draftsRouter } from "./endpoints/drafts/router";
 import { countsRouter } from "./endpoints/counts/router";
 import { cronRouter } from "./endpoints/cron/router";
+import { metricsRouter } from "./endpoints/metrics/router";
 import { getScheduledJob, runCronJob } from "./cron/scheduler";
 import { Logger } from "./logger";
 import { etag } from "./middleware/etag";
@@ -73,6 +74,7 @@ openapi.route("/interactions", interactionsRouter);
 openapi.route("/drafts", draftsRouter);
 openapi.route("/counts", countsRouter);
 openapi.route("/cron", cronRouter);
+openapi.route("/metrics", metricsRouter);
 
 // Named export for testing (Hono's app.request() method)
 export { app };
@@ -90,7 +92,6 @@ export default {
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
 		const hour = new Date(event.scheduledTime).getUTCHours();
 		const job = getScheduledJob(hour);
-		if (!job) return;
 		const logger = new Logger(env.LOG_LEVEL);
 		ctx.waitUntil(
 			runCronJob(job, env).then((result) => {
