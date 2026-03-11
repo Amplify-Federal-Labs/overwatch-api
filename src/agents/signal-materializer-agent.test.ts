@@ -10,6 +10,9 @@ const ITEM_WITH_OBSERVATIONS: IngestedItemWithObservations = {
 	sourceLink: "https://govconwire.com/article/1",
 	content: "Booz Allen Hamilton wins $5M DevSecOps contract from NIWC Pacific",
 	sourceMetadata: null,
+	relevanceScore: null,
+	relevanceRationale: null,
+	competencyCodes: null,
 	createdAt: "2026-03-01T12:00:00Z",
 	observations: [
 		{

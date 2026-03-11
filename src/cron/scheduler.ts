@@ -83,11 +83,7 @@ export async function runCronJob(job: CronJob, env: Env): Promise<unknown> {
 				env.SYNTHESIS as unknown as DurableObjectNamespace<SynthesisAgent>,
 				"singleton",
 			);
-			const { EntityProfileRepository } = await import("../db/entity-profile-repository");
-			const repo = new EntityProfileRepository(env.DB);
-			const profiles = await repo.findAllProfilesWithAliases();
-			const profileIds = profiles.map((p) => p.id);
-			return agent.synthesizeProfiles(profileIds);
+			return agent.synthesizeProfiles([]);
 		}
 		case "signal_materialization": {
 			const agent = await getAgentByName<Env, SignalMaterializerAgent>(
@@ -101,10 +97,7 @@ export async function runCronJob(job: CronJob, env: Env): Promise<unknown> {
 				env.ENRICHMENT as unknown as DurableObjectNamespace<EnrichmentAgent>,
 				"singleton",
 			);
-			const { EnrichmentRepository } = await import("../db/enrichment-repository");
-			const repo = new EnrichmentRepository(env.DB);
-			const pendingIds = await repo.findPendingProfileIds();
-			return agent.enrichProfiles(pendingIds);
+			return agent.enrichProfiles([]);
 		}
 	}
 }

@@ -80,6 +80,13 @@ export function buildSynthesisContext(
 	return lines.join("\n");
 }
 
+export function buildUnsynthesizedProfilesQuery() {
+	return {
+		lastSynthesizedAt: null,
+		minObservationCount: 1,
+	};
+}
+
 export class SynthesisRepository {
 	private db: ReturnType<typeof drizzle>;
 
@@ -93,6 +100,18 @@ export class SynthesisRepository {
 			.from(insights)
 			.get();
 		return result?.count ?? 0;
+	}
+
+	async findUnsynthesizedProfileIds(): Promise<string[]> {
+		const { lastSynthesizedAt, minObservationCount } = buildUnsynthesizedProfilesQuery();
+		const rows = await this.db
+			.select({ id: entityProfiles.id })
+			.from(entityProfiles)
+			.where(
+				sql`${entityProfiles.lastSynthesizedAt} IS NULL AND ${entityProfiles.observationCount} >= ${minObservationCount}`,
+			)
+			.all();
+		return rows.map((r) => r.id);
 	}
 
 	async findProfilesByIds(ids: string[]): Promise<ProfileForSynthesis[]> {

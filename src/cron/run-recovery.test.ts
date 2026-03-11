@@ -34,8 +34,8 @@ describe("runRecovery", () => {
 	it("returns empty result when pipeline is healthy", async () => {
 		const healthyStatus: PipelineStatus = {
 			unresolvedEntityCount: 0,
-			unsynthesizedProfileIds: [],
-			pendingEnrichmentIds: [],
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
 
@@ -49,8 +49,8 @@ describe("runRecovery", () => {
 	it("kicks entity resolver when entities are unresolved", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 5,
-			unsynthesizedProfileIds: [],
-			pendingEnrichmentIds: [],
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
 
@@ -65,11 +65,11 @@ describe("runRecovery", () => {
 		expect(mockAgent.runResolution).toHaveBeenCalledOnce();
 	});
 
-	it("kicks synthesis agent with unsynthesized profile IDs", async () => {
+	it("kicks synthesis agent with empty array (agent queries DB)", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
-			unsynthesizedProfileIds: ["p1", "p2"],
-			pendingEnrichmentIds: [],
+			unsynthesizedProfileCount: 2,
+			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
 
@@ -80,14 +80,14 @@ describe("runRecovery", () => {
 
 		expect(result.recoveryActions).toHaveLength(1);
 		expect(result.recoveryActions[0].agentName).toBe("synthesis");
-		expect(mockAgent.synthesizeProfiles).toHaveBeenCalledWith(["p1", "p2"]);
+		expect(mockAgent.synthesizeProfiles).toHaveBeenCalledWith([]);
 	});
 
-	it("kicks enrichment agent with pending profile IDs", async () => {
+	it("kicks enrichment agent with empty array (agent queries DB)", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
-			unsynthesizedProfileIds: [],
-			pendingEnrichmentIds: ["p3", "p4"],
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 2,
 			unmaterializedItemCount: 0,
 		};
 
@@ -98,14 +98,14 @@ describe("runRecovery", () => {
 
 		expect(result.recoveryActions).toHaveLength(1);
 		expect(result.recoveryActions[0].agentName).toBe("enrichment");
-		expect(mockAgent.enrichProfiles).toHaveBeenCalledWith(["p3", "p4"]);
+		expect(mockAgent.enrichProfiles).toHaveBeenCalledWith([]);
 	});
 
 	it("kicks signal materializer when items are unmaterialized", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
-			unsynthesizedProfileIds: [],
-			pendingEnrichmentIds: [],
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 3,
 		};
 
@@ -122,8 +122,8 @@ describe("runRecovery", () => {
 	it("kicks multiple agents when pipeline is broken at several points", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 2,
-			unsynthesizedProfileIds: ["p1"],
-			pendingEnrichmentIds: ["p2"],
+			unsynthesizedProfileCount: 1,
+			pendingEnrichmentCount: 1,
 			unmaterializedItemCount: 1,
 		};
 
@@ -149,8 +149,8 @@ describe("runRecovery", () => {
 	it("records failed status when agent dispatch throws", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 5,
-			unsynthesizedProfileIds: [],
-			pendingEnrichmentIds: [],
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
 

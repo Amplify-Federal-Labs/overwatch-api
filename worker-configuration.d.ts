@@ -13,6 +13,7 @@ declare namespace Cloudflare {
 		CF_AIG_MODEL: string;
 		BRAVE_SEARCH_API_KEY: string;
 		LOG_LEVEL: string;
+		RELEVANCE_THRESHOLD: string;
 		SAM_GOV_API_KEY: string;
 		OBSERVATION_EXTRACTOR: DurableObjectNamespace<import("./src/index").ObservationExtractorAgent>;
 		ENTITY_RESOLVER: DurableObjectNamespace<import("./src/index").EntityResolverAgent>;
@@ -26,7 +27,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CF_AIG_TOKEN" | "CF_AIG_BASEURL" | "CF_AIG_MODEL" | "BRAVE_SEARCH_API_KEY" | "LOG_LEVEL" | "SAM_GOV_API_KEY">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "CF_AIG_TOKEN" | "CF_AIG_BASEURL" | "CF_AIG_MODEL" | "BRAVE_SEARCH_API_KEY" | "LOG_LEVEL" | "RELEVANCE_THRESHOLD" | "SAM_GOV_API_KEY">> {}
 }
 
 // Begin runtime types

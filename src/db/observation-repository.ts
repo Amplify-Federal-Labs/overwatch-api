@@ -36,6 +36,18 @@ export function buildEntityRefRows(observationId: number, entities: EntityRef[])
 	}));
 }
 
+export function buildRelevanceScoreUpdate(
+	relevanceScore: number,
+	relevanceRationale: string,
+	competencyCodes: string[],
+) {
+	return {
+		relevanceScore,
+		relevanceRationale,
+		competencyCodes,
+	};
+}
+
 export class ObservationRepository {
 	private db: ReturnType<typeof drizzle>;
 
@@ -83,6 +95,24 @@ export class ObservationRepository {
 		}
 
 		return count;
+	}
+
+	async updateRelevanceScore(
+		itemId: string,
+		relevanceScore: number,
+		relevanceRationale: string,
+		competencyCodes: string[],
+	): Promise<void> {
+		const update = buildRelevanceScoreUpdate(relevanceScore, relevanceRationale, competencyCodes);
+		await this.db
+			.update(ingestedItems)
+			.set({
+				relevanceScore: update.relevanceScore,
+				relevanceRationale: update.relevanceRationale,
+				competencyCodes: update.competencyCodes,
+			})
+			.where(eq(ingestedItems.id, itemId))
+			.run();
 	}
 
 	async ingestedItemExistsBySourceLink(sourceLink: string): Promise<boolean> {
@@ -251,8 +281,13 @@ export class ObservationRepository {
 		return result;
 	}
 
-	async findUnmaterializedItems(limit: number) {
-		// Find ingested items that have observations but no materialized signal yet
+	async findUnmaterializedItems(limit: number, relevanceThreshold?: number) {
+		// Find ingested items that have observations but no materialized signal yet.
+		// If relevanceThreshold is provided, exclude items scored below it (null = legacy, still included).
+		const thresholdClause = relevanceThreshold !== undefined
+			? sql` AND (${ingestedItems.relevanceScore} IS NULL OR ${ingestedItems.relevanceScore} >= ${relevanceThreshold})`
+			: sql``;
+
 		const items = await this.db
 			.select({
 				id: ingestedItems.id,
@@ -262,6 +297,9 @@ export class ObservationRepository {
 				sourceLink: ingestedItems.sourceLink,
 				content: ingestedItems.content,
 				sourceMetadata: ingestedItems.sourceMetadata,
+				relevanceScore: ingestedItems.relevanceScore,
+				relevanceRationale: ingestedItems.relevanceRationale,
+				competencyCodes: ingestedItems.competencyCodes,
 				createdAt: ingestedItems.createdAt,
 			})
 			.from(ingestedItems)
@@ -270,7 +308,7 @@ export class ObservationRepository {
 					SELECT DISTINCT ${observations.signalId} FROM ${observations}
 				) AND ${ingestedItems.id} NOT IN (
 					SELECT ${signals.ingestedItemId} FROM ${signals}
-				)`,
+				)${thresholdClause}`,
 			)
 			.orderBy(desc(ingestedItems.createdAt))
 			.limit(limit)

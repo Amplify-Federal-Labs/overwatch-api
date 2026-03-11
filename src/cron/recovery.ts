@@ -2,15 +2,14 @@ import type { AgentJob } from "./scheduler";
 
 export interface PipelineStatus {
 	unresolvedEntityCount: number;
-	unsynthesizedProfileIds: string[];
-	pendingEnrichmentIds: string[];
+	unsynthesizedProfileCount: number;
+	pendingEnrichmentCount: number;
 	unmaterializedItemCount: number;
 }
 
 export interface StuckStage {
 	agentName: AgentJob["agentName"];
 	reason: string;
-	profileIds?: string[];
 }
 
 export function diagnoseStuckStages(status: PipelineStatus): StuckStage[] {
@@ -23,19 +22,17 @@ export function diagnoseStuckStages(status: PipelineStatus): StuckStage[] {
 		});
 	}
 
-	if (status.unsynthesizedProfileIds.length > 0) {
+	if (status.unsynthesizedProfileCount > 0) {
 		stuck.push({
 			agentName: "synthesis",
-			reason: `${status.unsynthesizedProfileIds.length} profiles not yet synthesized`,
-			profileIds: status.unsynthesizedProfileIds,
+			reason: `${status.unsynthesizedProfileCount} profiles not yet synthesized`,
 		});
 	}
 
-	if (status.pendingEnrichmentIds.length > 0) {
+	if (status.pendingEnrichmentCount > 0) {
 		stuck.push({
 			agentName: "enrichment",
-			reason: `${status.pendingEnrichmentIds.length} profiles pending enrichment`,
-			profileIds: status.pendingEnrichmentIds,
+			reason: `${status.pendingEnrichmentCount} profiles pending enrichment`,
 		});
 	}
 

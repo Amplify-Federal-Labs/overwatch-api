@@ -2,7 +2,7 @@ import { Agent } from "agents";
 import { ObservationRepository } from "../db/observation-repository";
 import { EntityProfileRepository } from "../db/entity-profile-repository";
 import { SignalRepository } from "../db/signal-repository";
-import { materializeSignal, shouldSelfSchedule, type IngestedItemWithObservations, type MaterializationResult } from "./signal-materializer";
+import { materializeSignal, shouldSelfSchedule, type IngestedItemWithObservations, type MaterializationResult, type RelevanceOverride } from "./signal-materializer";
 import { SignalRelevanceScorer, type RelevanceInput, type ObservationSummary, type EntityContextItem } from "./signal-relevance-scorer";
 import { Logger } from "../logger";
 
@@ -43,13 +43,14 @@ export class SignalMaterializerAgent extends Agent<Env, AgentState> {
 		const obsRepo = new ObservationRepository(this.env.DB);
 		const entityRepo = new EntityProfileRepository(this.env.DB);
 		const signalRepo = new SignalRepository(this.env.DB);
-		const scorer = new SignalRelevanceScorer(this.env);
 		const startedAt = new Date().toISOString();
+		const threshold = parseInt(this.env.RELEVANCE_THRESHOLD ?? "60", 10);
 
 		logger.info("Starting signal materialization (new items)", { batchSize: BATCH_SIZE });
 
-		// Only fetch items that have observations but no materialized signal yet
-		const items = await obsRepo.findUnmaterializedItems(BATCH_SIZE);
+		// Only fetch items that have observations but no materialized signal yet,
+		// filtered by relevance threshold (null = legacy items still included)
+		const items = await obsRepo.findUnmaterializedItems(BATCH_SIZE, threshold);
 		const relevanceScores = await entityRepo.findRelevanceScores();
 
 		if (items.length === 0) {
@@ -62,8 +63,8 @@ export class SignalMaterializerAgent extends Agent<Env, AgentState> {
 
 		for (const item of items) {
 			try {
-				const override = await this.scoreRelevance(item, entityRepo, scorer, logger);
-				const signal = materializeSignal(item, relevanceScores, override);
+				const override = this.getRelevanceOverride(item, entityRepo, logger);
+				const signal = materializeSignal(item, relevanceScores, await override);
 				await signalRepo.upsert(signal);
 				materialized++;
 			} catch (err) {
@@ -76,7 +77,7 @@ export class SignalMaterializerAgent extends Agent<Env, AgentState> {
 		}
 
 		// Check if there are more items to process in subsequent runs
-		const nextBatch = await obsRepo.findUnmaterializedItems(1);
+		const nextBatch = await obsRepo.findUnmaterializedItems(1, threshold);
 		const remaining = nextBatch.length > 0 ? nextBatch.length : 0;
 
 		const result: MaterializationResult = { materialized, skipped, remaining, startedAt };
@@ -96,7 +97,6 @@ export class SignalMaterializerAgent extends Agent<Env, AgentState> {
 		const obsRepo = new ObservationRepository(this.env.DB);
 		const entityRepo = new EntityProfileRepository(this.env.DB);
 		const signalRepo = new SignalRepository(this.env.DB);
-		const scorer = new SignalRelevanceScorer(this.env);
 		const startedAt = new Date().toISOString();
 
 		logger.info("Starting signal rematerialization", { entityProfileIds });
@@ -125,7 +125,7 @@ export class SignalMaterializerAgent extends Agent<Env, AgentState> {
 					continue;
 				}
 
-				const override = await this.scoreRelevance(item, entityRepo, scorer, logger);
+				const override = await this.getRelevanceOverride(item, entityRepo, logger);
 				const signal = materializeSignal(item, relevanceScores, override);
 				await signalRepo.upsert(signal);
 				materialized++;
@@ -144,12 +144,35 @@ export class SignalMaterializerAgent extends Agent<Env, AgentState> {
 		return result;
 	}
 
-	private async scoreRelevance(
+	/**
+	 * Returns relevance override for materialization.
+	 * Uses stored ingestion-time score when available, falls back to AI scoring for legacy items.
+	 */
+	private async getRelevanceOverride(
 		item: IngestedItemWithObservations,
 		entityRepo: EntityProfileRepository,
-		scorer: SignalRelevanceScorer,
 		logger: Logger,
-	): Promise<{ score: number; rationale: string; competencyCodes: string[] }> {
+	): Promise<RelevanceOverride> {
+		// Use stored score from ingestion-time relevance gate
+		if (item.relevanceScore !== null) {
+			return {
+				score: item.relevanceScore,
+				rationale: item.relevanceRationale ?? "",
+				competencyCodes: item.competencyCodes ?? [],
+			};
+		}
+
+		// Fallback: AI scoring for legacy items without stored scores
+		return this.scoreLegacyItem(item, entityRepo, logger);
+	}
+
+	private async scoreLegacyItem(
+		item: IngestedItemWithObservations,
+		entityRepo: EntityProfileRepository,
+		logger: Logger,
+	): Promise<RelevanceOverride> {
+		const scorer = new SignalRelevanceScorer(this.env);
+
 		try {
 			const observationSummaries: ObservationSummary[] = item.observations.map((o) => ({
 				type: o.type,
@@ -161,7 +184,6 @@ export class SignalMaterializerAgent extends Agent<Env, AgentState> {
 				})),
 			}));
 
-			// Collect unique entity profile IDs for context
 			const profileIds = [
 				...new Set(
 					item.observations
@@ -190,7 +212,7 @@ export class SignalMaterializerAgent extends Agent<Env, AgentState> {
 			const result = await scorer.score(input);
 			return { score: result.relevanceScore, rationale: result.rationale, competencyCodes: result.competencyCodes };
 		} catch (err) {
-			logger.error("AI relevance scoring failed, falling back to 0", {
+			logger.error("AI relevance scoring failed for legacy item, falling back to 0", {
 				itemId: item.id,
 				error: err instanceof Error ? err : new Error(String(err)),
 			});

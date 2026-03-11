@@ -12,28 +12,28 @@ export class RecoveryRepository {
 		return row?.count ?? 0;
 	}
 
-	async findUnsynthesizedProfileIds(): Promise<string[]> {
-		const { results } = await this.db
+	async countUnsynthesizedProfiles(): Promise<number> {
+		const row = await this.db
 			.prepare(
-				`SELECT ep.id FROM entity_profiles ep
-				 WHERE ep.last_synthesized_at IS NULL
-				 AND ep.observation_count > 0`,
+				`SELECT COUNT(*) as count FROM entity_profiles
+				 WHERE last_synthesized_at IS NULL
+				 AND observation_count > 0`,
 			)
-			.all<{ id: string }>();
-		return results.map((r) => r.id);
+			.first<{ count: number }>();
+		return row?.count ?? 0;
 	}
 
-	async findPendingEnrichmentIds(): Promise<string[]> {
+	async countPendingEnrichments(): Promise<number> {
 		const placeholders = ENRICHABLE_TYPES.map(() => "?").join(", ");
-		const { results } = await this.db
+		const row = await this.db
 			.prepare(
-				`SELECT id FROM entity_profiles
+				`SELECT COUNT(*) as count FROM entity_profiles
 				 WHERE enrichment_status = 'pending'
 				 AND type IN (${placeholders})`,
 			)
 			.bind(...ENRICHABLE_TYPES)
-			.all<{ id: string }>();
-		return results.map((r) => r.id);
+			.first<{ count: number }>();
+		return row?.count ?? 0;
 	}
 
 	async countUnmaterializedItems(): Promise<number> {
@@ -48,18 +48,18 @@ export class RecoveryRepository {
 	}
 
 	async getPipelineStatus(): Promise<PipelineStatus> {
-		const [unresolvedEntityCount, unsynthesizedProfileIds, pendingEnrichmentIds, unmaterializedItemCount] =
+		const [unresolvedEntityCount, unsynthesizedProfileCount, pendingEnrichmentCount, unmaterializedItemCount] =
 			await Promise.all([
 				this.countUnresolvedEntities(),
-				this.findUnsynthesizedProfileIds(),
-				this.findPendingEnrichmentIds(),
+				this.countUnsynthesizedProfiles(),
+				this.countPendingEnrichments(),
 				this.countUnmaterializedItems(),
 			]);
 
 		return {
 			unresolvedEntityCount,
-			unsynthesizedProfileIds,
-			pendingEnrichmentIds,
+			unsynthesizedProfileCount,
+			pendingEnrichmentCount,
 			unmaterializedItemCount,
 		};
 	}

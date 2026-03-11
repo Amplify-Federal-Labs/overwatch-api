@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
 	buildInsightRow,
 	type ObservationWithEntities,
 	buildSynthesisContext,
+	buildUnsynthesizedProfilesQuery,
 } from "./synthesis-repository";
 
 const OBSERVATIONS: ObservationWithEntities[] = [
@@ -73,5 +74,15 @@ describe("buildSynthesisContext", () => {
 	it("handles empty observations", () => {
 		const context = buildSynthesisContext("Unknown Corp", "company", []);
 		expect(context).toContain("0 observations");
+	});
+});
+
+describe("buildUnsynthesizedProfilesQuery", () => {
+	it("returns query conditions for profiles with observations but no synthesis", () => {
+		const query = buildUnsynthesizedProfilesQuery();
+		expect(query).toEqual({
+			lastSynthesizedAt: null,
+			minObservationCount: 1,
+		});
 	});
 });

@@ -11,7 +11,8 @@
 		"crons": ["0 * * * *"]
 	},
 	"vars": {
-		"LOG_LEVEL": "ERROR"
+		"LOG_LEVEL": "ERROR",
+		"RELEVANCE_THRESHOLD": "60"
 	},
 	"d1_databases": [
 		{

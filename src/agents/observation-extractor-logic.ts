@@ -5,6 +5,8 @@ export interface IngestionResult {
 	signalsFound: number;
 	signalsStored: number;
 	observationsExtracted: number;
+	itemsAboveThreshold: number;
+	itemsBelowThreshold: number;
 	startedAt: string;
 }
 

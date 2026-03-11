@@ -8,6 +8,9 @@ export interface IngestedItemWithObservations {
 	sourceLink: string | null;
 	content: string;
 	sourceMetadata: Record<string, string> | null;
+	relevanceScore: number | null;
+	relevanceRationale: string | null;
+	competencyCodes: string[] | null;
 	createdAt: string;
 	observations: ObservationWithEntities[];
 }

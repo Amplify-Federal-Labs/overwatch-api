@@ -11,6 +11,9 @@ export const ingestedItems = sqliteTable("ingested_items", {
 	sourceLink: text("source_link").unique(),
 	content: text("content").notNull(),
 	sourceMetadata: text("source_metadata", { mode: "json" }).$type<Record<string, string>>(),
+	relevanceScore: integer("relevance_score"),
+	relevanceRationale: text("relevance_rationale"),
+	competencyCodes: text("competency_codes", { mode: "json" }).$type<string[]>(),
 	createdAt: text("created_at").notNull(),
 });
 

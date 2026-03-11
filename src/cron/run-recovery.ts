@@ -72,7 +72,7 @@ async function dispatchRecovery(env: Env, stage: StuckStage): Promise<void> {
 				env.SYNTHESIS as unknown as DurableObjectNamespace<SynthesisAgent>,
 				"singleton",
 			);
-			await agent.synthesizeProfiles(stage.profileIds ?? []);
+			await agent.synthesizeProfiles([]);
 			break;
 		}
 		case "enrichment": {
@@ -80,7 +80,7 @@ async function dispatchRecovery(env: Env, stage: StuckStage): Promise<void> {
 				env.ENRICHMENT as unknown as DurableObjectNamespace<EnrichmentAgent>,
 				"singleton",
 			);
-			await agent.enrichProfiles(stage.profileIds ?? []);
+			await agent.enrichProfiles([]);
 			break;
 		}
 		case "signal_materialization": {

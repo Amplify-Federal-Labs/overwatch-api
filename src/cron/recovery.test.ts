@@ -5,8 +5,8 @@ describe("diagnoseStuckStages", () => {
 	it("returns empty array when pipeline is healthy", () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
-			unsynthesizedProfileIds: [],
-			pendingEnrichmentIds: [],
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
 		expect(diagnoseStuckStages(status)).toEqual([]);
@@ -15,8 +15,8 @@ describe("diagnoseStuckStages", () => {
 	it("returns entity_resolution when there are unresolved entities", () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 5,
-			unsynthesizedProfileIds: [],
-			pendingEnrichmentIds: [],
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
 		const result = diagnoseStuckStages(status);
@@ -30,8 +30,8 @@ describe("diagnoseStuckStages", () => {
 	it("returns synthesis when there are unsynthesized profiles", () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
-			unsynthesizedProfileIds: ["p1", "p2"],
-			pendingEnrichmentIds: [],
+			unsynthesizedProfileCount: 2,
+			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
 		const result = diagnoseStuckStages(status);
@@ -39,15 +39,14 @@ describe("diagnoseStuckStages", () => {
 		expect(result[0]).toEqual({
 			agentName: "synthesis",
 			reason: "2 profiles not yet synthesized",
-			profileIds: ["p1", "p2"],
 		});
 	});
 
 	it("returns enrichment when there are pending enrichable profiles", () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
-			unsynthesizedProfileIds: [],
-			pendingEnrichmentIds: ["p3", "p4", "p5"],
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 3,
 			unmaterializedItemCount: 0,
 		};
 		const result = diagnoseStuckStages(status);
@@ -55,15 +54,14 @@ describe("diagnoseStuckStages", () => {
 		expect(result[0]).toEqual({
 			agentName: "enrichment",
 			reason: "3 profiles pending enrichment",
-			profileIds: ["p3", "p4", "p5"],
 		});
 	});
 
 	it("returns signal_materialization when there are unmaterialized items", () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
-			unsynthesizedProfileIds: [],
-			pendingEnrichmentIds: [],
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 3,
 		};
 		const result = diagnoseStuckStages(status);
@@ -77,8 +75,8 @@ describe("diagnoseStuckStages", () => {
 	it("returns multiple stuck stages when pipeline is broken at several points", () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 2,
-			unsynthesizedProfileIds: ["p1"],
-			pendingEnrichmentIds: ["p2", "p3"],
+			unsynthesizedProfileCount: 1,
+			pendingEnrichmentCount: 2,
 			unmaterializedItemCount: 5,
 		};
 		const result = diagnoseStuckStages(status);

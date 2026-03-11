@@ -34,9 +34,28 @@ export class EnrichmentAgent extends Agent<Env, AgentState> {
 
 		logger.info("EnrichmentAgent received profile IDs", { count: profileIds.length });
 
+		// When called with empty array, query DB for pending profiles
+		const effectiveIds = profileIds.length > 0
+			? profileIds
+			: await repo.findPendingProfileIds();
+
+		if (effectiveIds.length === 0) {
+			logger.info("No profiles need enrichment");
+			return {
+				profilesProcessed: 0,
+				profilesEnriched: 0,
+				profilesFailed: 0,
+				profilesSkipped: 0,
+				remainingProfileIds: [],
+				startedAt: new Date().toISOString(),
+			};
+		}
+
+		logger.info("Profiles to enrich", { count: effectiveIds.length });
+
 		// Fetch full profile data and observation context for the given IDs
-		const profiles = await repo.findProfilesByIds(profileIds);
-		const contextMap = await repo.findContextForProfiles(profileIds);
+		const profiles = await repo.findProfilesByIds(effectiveIds);
+		const contextMap = await repo.findContextForProfiles(effectiveIds);
 		const profilesWithContext = profiles.map((p) => ({
 			...p,
 			context: contextMap.get(p.id),

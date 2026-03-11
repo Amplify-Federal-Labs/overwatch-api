@@ -9,6 +9,9 @@ const ITEM_WITH_CONTRACT_AWARD: IngestedItemWithObservations = {
 	sourceLink: "https://govconwire.com/article/1",
 	content: "Booz Allen Hamilton has been awarded a $5 million contract by NIWC Pacific for DevSecOps platform modernization.",
 	sourceMetadata: null,
+	relevanceScore: null,
+	relevanceRationale: null,
+	competencyCodes: null,
 	createdAt: "2026-03-01T12:00:00Z",
 	observations: [
 		{
@@ -36,6 +39,9 @@ const ITEM_WITH_SOLICITATION: IngestedItemWithObservations = {
 	sourceLink: "https://sam.gov/opp/123",
 	content: "The U.S. Army issued an RFP for cloud migration services under the Army Cloud Computing Enterprise Transition.",
 	sourceMetadata: null,
+	relevanceScore: null,
+	relevanceRationale: null,
+	competencyCodes: null,
 	createdAt: "2026-03-02T12:00:00Z",
 	observations: [
 		{
@@ -62,6 +68,9 @@ const ITEM_NO_OBSERVATIONS: IngestedItemWithObservations = {
 	sourceLink: "https://fedscoop.com/article/3",
 	content: "General update about federal IT spending trends in FY2026.",
 	sourceMetadata: null,
+	relevanceScore: null,
+	relevanceRationale: null,
+	competencyCodes: null,
 	createdAt: "2026-03-03T12:00:00Z",
 	observations: [],
 };

@@ -45,13 +45,20 @@ export class SynthesisAgent extends Agent<Env, AgentState> {
 
 		logger.info("Starting profile synthesis", { profileCount: profileIds.length });
 
-		if (profileIds.length === 0) {
-			logger.info("No profile IDs provided for synthesis");
+		// When called with empty array, query DB for unsynthesized profiles
+		const effectiveIds = profileIds.length > 0
+			? profileIds
+			: await repository.findUnsynthesizedProfileIds();
+
+		if (effectiveIds.length === 0) {
+			logger.info("No profiles need synthesis");
 			return { profilesProcessed: 0, insightsGenerated: 0, remainingProfileIds: [], startedAt };
 		}
 
-		const batch = profileIds.slice(0, BATCH_SIZE);
-		const remainingProfileIds = profileIds.slice(BATCH_SIZE);
+		logger.info("Profiles to synthesize", { count: effectiveIds.length });
+
+		const batch = effectiveIds.slice(0, BATCH_SIZE);
+		const remainingProfileIds = effectiveIds.slice(BATCH_SIZE);
 
 		const profiles = await repository.findProfilesByIds(batch);
 		if (profiles.length === 0) {

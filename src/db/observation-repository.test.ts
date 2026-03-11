@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildIngestedItemRow, buildObservationRow, buildEntityRefRows } from "./observation-repository";
+import { buildIngestedItemRow, buildObservationRow, buildEntityRefRows, buildRelevanceScoreUpdate } from "./observation-repository";
 import type { SignalAnalysisInput, ObservationExtraction } from "../schemas";
 
 const SIGNAL_INPUT: SignalAnalysisInput = {
@@ -123,5 +123,22 @@ describe("buildEntityRefRows", () => {
 	it("should return empty array for no entities", () => {
 		const rows = buildEntityRefRows(1, []);
 		expect(rows).toHaveLength(0);
+	});
+});
+
+describe("buildRelevanceScoreUpdate", () => {
+	it("should build update fields from relevance scoring result", () => {
+		const update = buildRelevanceScoreUpdate(75, "High relevance to DevSecOps", ["A", "B"]);
+
+		expect(update.relevanceScore).toBe(75);
+		expect(update.relevanceRationale).toBe("High relevance to DevSecOps");
+		expect(update.competencyCodes).toEqual(["A", "B"]);
+	});
+
+	it("should handle empty competency codes", () => {
+		const update = buildRelevanceScoreUpdate(15, "Low relevance", []);
+
+		expect(update.relevanceScore).toBe(15);
+		expect(update.competencyCodes).toEqual([]);
 	});
 });
