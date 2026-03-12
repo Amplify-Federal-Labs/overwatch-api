@@ -16,7 +16,8 @@ See `overwatch-web/CLAUDE.md` for full domain context (competency clusters, outr
 | Validation | Zod |
 | Database | Cloudflare D1 (SQLite) via Drizzle ORM |
 | Runtime | Cloudflare Workers |
-| AI | Cloudflare Workers AI (signal analysis, dossier extraction) |
+| Async Processing | Cloudflare Queues (6 queues, event-driven pipeline) |
+| AI | Cloudflare Workers AI (observation extraction, relevance scoring, synthesis, dossier extraction) |
 | Search | Brave Search API (entity enrichment) |
 | XML Parsing | fast-xml-parser (FPDS ATOM feeds, RSS) |
 | Testing | Vitest (unit tests, colocated with source) |
@@ -26,7 +27,7 @@ See `overwatch-web/CLAUDE.md` for full domain context (competency clusters, outr
 ```
 overwatch-api/
 ├── src/
-│   ├── index.ts                              # Hono app: CORS, ETag, OpenAPI registry, router registration, cron handler
+│   ├── index.ts                              # Hono app: CORS, ETag, OpenAPI registry, router registration, cron + queue handlers
 │   ├── types.ts                              # AppContext type alias
 │   ├── logger.ts                             # Structured JSON logger with levels (DEBUG, INFO, WARN, ERROR)
 │   ├── middleware/
@@ -40,12 +41,12 @@ overwatch-api/
 │   │   ├── draft.ts                          # EmailDraft, EmailDraftContext, EmailDraftStatus
 │   │   ├── constants.ts                      # OutreachPlay, CompetencyCluster
 │   │   └── index.ts                          # Barrel export (schemas + inferred types)
-│   ├── data/                                 # Mock data (realistic, based on Amplify's actual profile)
-│   │   ├── mock-kpis.ts
-│   │   ├── mock-signals.ts
-│   │   ├── mock-stakeholders.ts
-│   │   ├── mock-competitors.ts
-│   │   └── mock-drafts.ts
+│   ├── domain/                               # Domain model types and pure logic
+│   │   ├── entity-profile.ts, entity-alias.ts, entity-relationship.ts
+│   │   ├── entity-mention.ts, unresolved-group.ts
+│   │   ├── observation.ts, ingested-item.ts
+│   │   ├── signal.ts, insight.ts, dossier.ts
+│   │   └── *.test.ts                         # Colocated unit tests
 │   ├── db/                                   # Database layer (Drizzle ORM + D1)
 │   │   ├── schema.ts                         # Drizzle schema (ingested_items, signals, observations, entity_profiles, etc.)
 │   │   ├── observation-repository.ts          # Ingested items & observations CRUD
@@ -53,10 +54,25 @@ overwatch-api/
 │   │   ├── entity-profile-repository.ts      # Entity profiles, aliases, resolution
 │   │   ├── synthesis-repository.ts           # Synthesis queries, insights
 │   │   └── enrichment-repository.ts          # Entity enrichment status tracking
-│   ├── signals/                              # Signal ingestion & analysis pipeline
-│   │   ├── signal-ingestor.ts                # Master orchestrator: fetch → analyze → match → store
-│   │   ├── signal-analyzer.ts                # AI analysis via Cloudflare Workers AI (CF_AIG)
-│   │   ├── stakeholder-matcher.ts            # Match entities → stakeholders, discover new entities
+│   ├── agents/                               # Pure AI logic (no DO runtime dependency)
+│   │   ├── observation-extractor.ts           # AI extraction of typed observations from raw content
+│   │   ├── entity-resolver.ts                 # Entity resolution: alias match + AI fuzzy matching
+│   │   ├── entity-match-ai.ts                 # AI-powered fuzzy entity name matching
+│   │   ├── profile-synthesizer.ts             # AI synthesis: summary, trajectory, relevance, insights
+│   │   ├── signal-materializer.ts             # Pure function: materializeSignal() transforms items → signals
+│   │   ├── signal-relevance-scorer.ts         # AI relevance scoring (0-100) for Amplify Federal
+│   │   └── relevance-gate.ts                  # Threshold-based filtering + input building
+│   ├── queues/                               # Cloudflare Queue consumers (event-driven pipeline)
+│   │   ├── types.ts                           # QueueMessage discriminated union (6 message types)
+│   │   ├── queue-router.ts                    # Routes messages to handler functions by type
+│   │   ├── build-handlers.ts                  # Wires consumers with concrete dependencies from Env
+│   │   ├── ingestion-consumer.ts              # Fetch sources → dedup → store → produce ExtractionMessages
+│   │   ├── extraction-consumer.ts             # AI extract observations → score relevance → gate → produce ResolutionMessages
+│   │   ├── resolution-consumer.ts             # Resolve entities → fan-out SynthesisMessages + EnrichmentMessages
+│   │   ├── synthesis-consumer.ts              # AI synthesize profiles → store insights → produce MaterializationMessages
+│   │   ├── enrichment-consumer.ts             # Brave Search → fetch pages → AI dossier extraction
+│   │   └── materialization-consumer.ts        # materializeSignal() → upsert to signals table
+│   ├── signals/                              # Source-specific fetchers and parsers
 │   │   ├── types.ts                          # SignalSourceType, RssFeedConfig
 │   │   ├── fpds/
 │   │   │   ├── fpds-contracts-fetcher.ts     # FPDS.gov ATOM feed (3-day lookback, paginated)
@@ -67,13 +83,15 @@ overwatch-api/
 │   │   └── sam-gov/
 │   │       ├── sam-gov-fetcher.ts            # SAM.gov opportunities + APBI events
 │   │       └── sam-gov-parser.ts             # JSON → SignalAnalysisInput
-│   ├── enrichment/                           # Discovered entity enrichment pipeline
-│   │   ├── entity-enricher.ts                # Orchestrator: search → fetch pages → extract dossier
-│   │   ├── brave-searcher.ts                 # Brave Search API (mil.gov, defense.gov, LinkedIn filters)
+│   ├── enrichment/                           # Entity enrichment components
+│   │   ├── brave-searcher.ts                 # Brave Search API (context-aware queries, site filters)
 │   │   ├── page-fetcher.ts                   # Fetch & extract page text from search results
 │   │   └── dossier-extractor.ts              # AI extraction of person/agency/company dossiers
 │   ├── cron/
-│   │   └── scheduler.ts                      # Daily cron (0 0-2 * * *): fixed-hour ingestion (0=rss, 1=sam_gov, 2=fpds)
+│   │   ├── scheduler.ts                      # Cron scheduling, on-demand dispatch, dispatchOnDemandJob()
+│   │   ├── recovery.ts                       # diagnoseStuckStages() pure logic
+│   │   ├── run-recovery.ts                   # Recovery orchestrator (queue-based dispatch)
+│   │   └── recovery-repository.ts            # Pipeline health queries (counts of stuck items)
 │   └── endpoints/
 │       ├── kpis/                             # GET /kpis
 │       ├── signals/                          # GET /signals (D1), POST /signals/analyze
@@ -82,16 +100,19 @@ overwatch-api/
 │       ├── interactions/                     # GET /interactions
 │       ├── drafts/                           # GET /drafts, POST /drafts/:id/accept, POST /drafts/:id/reject
 │       ├── cron/                             # POST /cron/:jobName (on-demand trigger)
-│       └── tasks/                            # CRUD /tasks (D1-backed, pre-existing)
+│       ├── counts/                           # GET /counts
+│       └── metrics/                          # GET /metrics
+├── docs/
+│   └── pipeline-processing-report.md         # Full lifecycle of an ingested item through the pipeline
 ├── tests/
 │   └── vitest.unit.config.mts               # Unit test config
 ├── migrations/                               # D1 SQL migrations (0001–0013)
-├── wrangler.jsonc                            # Cloudflare Workers config (D1, cron triggers, AI binding)
-├── worker-configuration.d.ts                 # Env type (DB, CF_AIG, BRAVE_SEARCH_API_KEY, SAM_GOV_API_KEY)
+├── wrangler.jsonc                            # Cloudflare Workers config (D1, queues, cron triggers)
+├── worker-configuration.d.ts                 # Env type (DB, queues, AI, API keys)
 └── package.json
 ```
 
-Unit tests are colocated with source files (e.g., `src/signals/signal-analyzer.test.ts`).
+Unit tests are colocated with source files (e.g., `src/queues/extraction-consumer.test.ts`).
 
 ## Key Commands
 
@@ -120,7 +141,8 @@ All endpoints return Chanfana envelope: `{ success: boolean, result: T }`
 | POST | /drafts/:id/accept | Accept an email draft |
 | POST | /drafts/:id/reject | Reject an email draft |
 | POST | /cron/:jobName | On-demand cron job trigger |
-| CRUD | /tasks/* | Task management (D1-backed, pre-existing) |
+| GET | /counts | Pipeline stage counts |
+| GET | /metrics | Pipeline health metrics |
 
 OpenAPI docs available at `/` when running locally.
 
@@ -139,28 +161,51 @@ Every endpoint extends `OpenAPIRoute` with Zod schema definitions for request/re
 ### Router Pattern
 Each endpoint group has a `router.ts` that creates a Hono sub-app, registers endpoints via Chanfana's `fromHono()`, and exports the router. The main `index.ts` mounts routers with `openapi.route("/path", router)`.
 
-### Evidence-Based Intelligence Pipeline (ADR-003)
-The system uses an evidence-based approach with 5 Cloudflare Agent Durable Objects, connected via a task-chained pipeline:
+### Evidence-Based Intelligence Pipeline (Cloudflare Queues)
+The system uses an event-driven, queue-based pipeline with 6 Cloudflare Queues:
 
-1. **ObservationExtractorAgent** — Cron-triggered. Fetches raw content (FPDS, SAM.gov, RSS) → stores as `ingested_items` → AI extracts typed observations with entity mentions → queues EntityResolverAgent
-2. **EntityResolverAgent** — Task-chained. Batch resolves raw entity names to canonical `entity_profiles` via exact alias match + AI fuzzy matching → queues SynthesisAgent(`resolvedProfileIds`) + EnrichmentAgent(`newProfileIds`) in parallel
-3. **SynthesisAgent** — Task-chained. Receives explicit profile IDs, synthesizes observations into summaries, trajectories, relevance scores, and insights → queues SignalMaterializerAgent. Self-schedules remaining IDs (batch 25).
-4. **EnrichmentAgent** — Task-chained (parallel with Synthesis). Receives explicit new profile IDs, enriches via Brave Search → page fetch → AI dossier extraction. Self-schedules remaining IDs (batch 10).
-5. **SignalMaterializerAgent** — Task-chained (terminal). Materializes `signals` table rows from ingested items + observations + entity relevance scores. Self-schedules remaining items (batch 10).
+```
+CRON (hourly) → INGESTION_QUEUE → EXTRACTION_QUEUE → RESOLUTION_QUEUE
+                                                          ↓
+                                           ┌──────────────┴──────────────┐
+                                    SYNTHESIS_QUEUE              ENRICHMENT_QUEUE
+                                           ↓                      (terminal)
+                                  MATERIALIZATION_QUEUE
+                                           ↓
+                                      signals table
+```
 
-**Chaining mechanism**: Upstream agents call `targetAgent.queue("methodName", payload)` via the Cloudflare Agents [queue tasks API](https://developers.cloudflare.com/agents/api-reference/queue-tasks/). Tasks are FIFO, persisted to SQLite, survive restarts, and support retries. Payloads carry explicit profile/item IDs — agents don't query DB for "what needs processing". The upstream agent returns immediately after enqueuing.
+1. **Ingestion** (`INGESTION_QUEUE`, batch 1) — Cron-triggered. Fetches raw content (FPDS, SAM.gov, RSS) → dedup by source_link → stores as `ingested_items` → produces ExtractionMessages
+2. **Extraction** (`EXTRACTION_QUEUE`, batch 5) — AI extracts typed observations with entity mentions → fetches source page (best-effort) → AI scores relevance (0-100) → items scoring ≥ threshold produce ResolutionMessages; below-threshold items stop here (stored for audit)
+3. **Resolution** (`RESOLUTION_QUEUE`, batch 10) — Resolves raw entity names to canonical `entity_profiles` via exact alias match + AI fuzzy matching → fans out SynthesisMessages (all resolved profiles) + EnrichmentMessages (new enrichable profiles) in parallel
+4. **Synthesis** (`SYNTHESIS_QUEUE`, batch 5) — AI synthesizes observations into summaries, trajectories, relevance scores, and insights → produces MaterializationMessages for each linked ingested item
+5. **Enrichment** (`ENRICHMENT_QUEUE`, batch 1) — Enriches new entity profiles via Brave Search → page fetch → AI dossier extraction. Terminal — no downstream chaining
+6. **Materialization** (`MATERIALIZATION_QUEUE`, batch 10) — Pure function `materializeSignal()` transforms ingested items + observations into materialized `signals` table rows. Terminal stage
+
+**Message granularity**: 1 message = 1 unit of work. Messages are a discriminated union on `type` field (see `src/queues/types.ts`).
+
+**Error handling**: All queues have `max_retries: 3` with dead-letter queue (`overwatch-dlq`). Failed messages are retried, then moved to DLQ.
+
+**Queue handler** (`src/index.ts`): Builds handlers once per batch via `buildQueueHandlers()`, routes each message through `routeQueueMessage()`.
+
+**Dependency injection**: All consumers accept a `deps` object with interfaces for repositories, AI clients, queues, and loggers. Concrete implementations wired in `buildQueueHandlers()` (`src/queues/build-handlers.ts`).
+
+**Important**: When passing `fetch` to consumers in Workers, wrap it as `(input, init) => fetch(input, init)` to avoid "Illegal invocation" errors from lost `this` binding.
 
 For the full processing lifecycle of an ingested item, see [docs/pipeline-processing-report.md](docs/pipeline-processing-report.md).
 
 ### Signal Materialization (ADR-002)
 Raw ingested content is separate from what the UI sees as "signals":
-- `ingested_items` table: raw content from FPDS, SAM.gov, RSS (no analysis metadata)
+- `ingested_items` table: raw content from FPDS, SAM.gov, RSS (with relevance score after extraction)
 - `signals` table: materialized with `branch`, `type`, `relevance`, `tags`, `competitors`, `vendors`, `stakeholderIds`, `entities`
 - `GET /signals` queries the materialized table directly with DB-level filtering (branch, type, relevance) and sorting (relevance DESC)
-- Pure logic in `materializeSignal()` function, tested independently from the DO
+- Pure logic in `materializeSignal()` function, tested independently
+
+### Early Relevance Gate (ADR-004)
+After observation extraction, each ingested item is scored for relevance to Amplify Federal (0-100). Items scoring below `RELEVANCE_THRESHOLD` (default: 60, configurable via env var) are excluded from all downstream processing (entity resolution, synthesis, enrichment, materialization). All items are stored with their scores for audit and threshold tuning.
 
 ### Entity Enrichment Pipeline
-Entity profiles are enriched via task chaining. EntityResolverAgent passes newly created profile IDs to `EnrichmentAgent.queue("enrichProfiles", newProfileIds)`. Can also be triggered on-demand via `POST /cron/enrichment` (queries DB for all `pending` profiles). Only enrichable entity types (`person`, `agency`, `company`) are processed — other types (`program`, `contract_vehicle`, `technology`) are automatically skipped.
+Entity profiles are enriched via the `ENRICHMENT_QUEUE`. The resolution consumer sends `EnrichmentMessage` for each newly created profile of enrichable type (`person`, `agency`, `company`). Can also be triggered on-demand via `POST /cron/enrichment` (queries DB for all `pending` profiles). Non-enrichable types (`program`, `contract_vehicle`, `technology`) are never enqueued.
 
 Per profile:
 1. **Search** — `BraveSearcher` queries Brave Search with context-aware queries (uses co-occurring entities from observations to build better search terms, e.g. `"Michael T. Geegan" "Department of the Army"` instead of generic `Michael T. Geegan defense government official`)
@@ -173,8 +218,23 @@ Per profile:
 - `AgencyDossier` — mission, branch, programs, parentOrg, leadership, focusAreas
 - `CompanyDossier` — description, coreCapabilities, keyContracts, keyCustomers, leadership, headquarters
 
-### Cron Scheduling (ADR-003)
-Cloudflare Workers cron fires once daily per source (`0 0-2 * * *`). Cron is **ingestion-only** with a fixed schedule: midnight UTC = RSS, 1 AM = SAM.gov, 2 AM = FPDS. All downstream processing (entity resolution, synthesis, enrichment, signal materialization) is triggered via task chaining after ingestion completes. Jobs can also be triggered on-demand via `POST /cron/:jobName`. Available on-demand jobs: `rss`, `sam_gov`, `fpds` (ingestion), `entity_resolution`, `synthesis`, `enrichment`, `signal_materialization` (agents).
+### Cron Scheduling
+Cloudflare Workers cron fires hourly (`0 * * * *`). The scheduler maps fixed UTC hours to jobs:
+
+| UTC Hour | Job |
+|----------|-----|
+| 0 (midnight) | RSS ingestion |
+| 1 | SAM.gov ingestion |
+| 2 | FPDS ingestion |
+| 3+ | Pipeline recovery (detect & re-dispatch stuck stages) |
+
+All downstream processing (extraction, entity resolution, synthesis, enrichment, materialization) is triggered automatically via queue chaining after ingestion.
+
+**On-demand jobs** via `POST /cron/:jobName`:
+- Ingestion: `rss`, `sam_gov`, `fpds` → sends IngestionMessage to queue
+- Processing: `synthesis`, `enrichment`, `signal_materialization` → scans DB for pending work, produces individual queue messages
+- `entity_resolution` → cannot be triggered on-demand (requires observation-level data); use `recovery` instead
+- `recovery` → diagnoses stuck pipeline stages and dispatches queue messages for all stuck stages
 
 ### Database (Drizzle + D1)
 Drizzle ORM provides type-safe access to D1. Key tables: `ingested_items`, `signals` (materialized), `observations`, `observation_entities`, `entity_profiles`, `entity_aliases`, `entity_relationships`, `insights`. Schema defined in `src/db/schema.ts`. Migrations in `migrations/` (0001–0013).
@@ -186,21 +246,24 @@ Middleware in `src/middleware/etag.ts` computes SHA-256 of GET response bodies a
 `src/logger.ts` provides structured JSON logging with levels controlled by `LOG_LEVEL` env var.
 
 ### Testing Strategy
-- Unit tests are colocated with source files (e.g., `src/signals/signal-analyzer.test.ts`)
+- Unit tests are colocated with source files (e.g., `src/queues/extraction-consumer.test.ts`)
 - Run with `npm test` (standard Vitest, config: `tests/vitest.unit.config.mts`)
 - Tests mock external dependencies (AI, fetch, D1) — no Workers pool required
+- All consumers use dependency injection, making them fully testable without queue or Workers runtime
 
 ### CORS
-Configured in `src/index.ts` via `hono/cors`. Currently allows `http://localhost:5173` (Vite dev server). Update the `origin` array when deploying to production.
+Configured in `src/index.ts` via `hono/cors`. Allows `http://localhost:5173` (Vite dev), `https://overwatch-d0f.pages.dev`, and `https://*.overwatch-d0f.pages.dev`.
 
 ## Environment Bindings
 
 Defined in `worker-configuration.d.ts`:
 - `DB` — Cloudflare D1 database
+- `INGESTION_QUEUE`, `EXTRACTION_QUEUE`, `RESOLUTION_QUEUE`, `SYNTHESIS_QUEUE`, `ENRICHMENT_QUEUE`, `MATERIALIZATION_QUEUE` — Cloudflare Queues
 - `CF_AIG_TOKEN`, `CF_AIG_BASEURL`, `CF_AIG_MODEL` — Cloudflare Workers AI
 - `BRAVE_SEARCH_API_KEY` — Brave Search API
 - `SAM_GOV_API_KEY` — SAM.gov API
 - `LOG_LEVEL` — Logging verbosity (DEBUG, INFO, WARN, ERROR)
+- `RELEVANCE_THRESHOLD` — Minimum relevance score (0-100) for downstream processing (default: 60)
 
 ## Workspace Setup
 
@@ -234,6 +297,6 @@ When adding new ingestion sources, always verify access method works before buil
 
 ## What's NOT Built Yet
 - **Google News RSS proxy** — .mil/.gov content via Google News site-scoped queries (highest priority next source)
+- **DLQ consumer** — Dead-letter queue monitoring and alerting
 - **Email sending** — Resend integration for accepted drafts
-- **Production CORS origins** — needs real Pages domain added
 - **Authentication** — no auth layer yet
