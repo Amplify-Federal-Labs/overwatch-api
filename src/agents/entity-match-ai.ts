@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { jsonrepair } from "jsonrepair";
 import type { EntityMatchResult } from "./entity-resolver";
+import type { FuzzyEntityMatchingService, FuzzyMatchCandidate, FuzzyMatchResult } from "../services/fuzzy-entity-matching";
 
 const CONFIDENCE_THRESHOLD = 0.7;
 
@@ -65,17 +66,28 @@ export function parseAiMatchResponse(raw: string, candidates: string[]): EntityM
 	return { match: matchedId, confidence };
 }
 
-export function createAiMatchFn(env: Env) {
-	const client = new OpenAI({
-		apiKey: env.CF_AIG_TOKEN,
-		baseURL: env.CF_AIG_BASEURL,
-	});
+export class AiFuzzyEntityMatcher implements FuzzyEntityMatchingService {
+	private client: OpenAI;
+	private model: string;
 
-	return async (name: string, candidates: string[], entityType: string): Promise<EntityMatchResult> => {
-		const userMessage = `Entity type: ${entityType}\nEntity name: "${name}"\n\nCandidates:\n${candidates.map((c) => `- ${c}`).join("\n")}`;
+	constructor(env: Env) {
+		this.client = new OpenAI({
+			apiKey: env.CF_AIG_TOKEN,
+			baseURL: env.CF_AIG_BASEURL,
+		});
+		this.model = env.CF_AIG_MODEL;
+	}
 
-		const response = await client.chat.completions.create({
-			model: `workers-ai/${env.CF_AIG_MODEL}`,
+	async match(
+		candidateName: string,
+		entityType: string,
+		candidates: FuzzyMatchCandidate[],
+	): Promise<FuzzyMatchResult> {
+		const candidateStrings = candidates.map((c) => `${c.id}:${c.canonicalName}`);
+		const userMessage = `Entity type: ${entityType}\nEntity name: "${candidateName}"\n\nCandidates:\n${candidateStrings.map((c) => `- ${c}`).join("\n")}`;
+
+		const response = await this.client.chat.completions.create({
+			model: `workers-ai/${this.model}`,
 			response_format: { type: "json_object" },
 			messages: [
 				{ role: "system", content: SYSTEM_PROMPT },
@@ -84,6 +96,20 @@ export function createAiMatchFn(env: Env) {
 		});
 
 		const raw = response.choices[0]?.message?.content ?? "";
-		return parseAiMatchResponse(raw, candidates);
+		const result = parseAiMatchResponse(raw, candidateStrings);
+		return { matchedId: result.match, confidence: result.confidence ?? 0 };
+	}
+}
+
+export function createAiMatchFn(env: Env) {
+	const matcher = new AiFuzzyEntityMatcher(env);
+
+	return async (name: string, candidates: string[], entityType: string): Promise<EntityMatchResult> => {
+		const parsed = candidates.map((c) => {
+			const colonIdx = c.indexOf(":");
+			return { id: c.slice(0, colonIdx), canonicalName: c.slice(colonIdx + 1) };
+		});
+		const result = await matcher.match(name, entityType, parsed);
+		return { match: result.matchedId, confidence: result.confidence };
 	};
 }

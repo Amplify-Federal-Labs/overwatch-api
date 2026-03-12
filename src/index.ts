@@ -14,6 +14,9 @@ import { metricsRouter } from "./endpoints/metrics/router";
 import { getScheduledJob, runCronJob } from "./cron/scheduler";
 import { Logger } from "./logger";
 import { etag } from "./middleware/etag";
+import { routeQueueMessage } from "./queues/queue-router";
+import { buildQueueHandlers } from "./queues/build-handlers";
+import type { QueueMessage } from "./queues/types";
 
 // Start a Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -79,14 +82,7 @@ openapi.route("/metrics", metricsRouter);
 // Named export for testing (Hono's app.request() method)
 export { app };
 
-// Export agent classes (required by Cloudflare Durable Objects)
-export { ObservationExtractorAgent } from "./agents/observation-extractor-agent";
-export { EntityResolverAgent } from "./agents/entity-resolver-agent";
-export { SynthesisAgent } from "./agents/synthesis-agent";
-export { SignalMaterializerAgent } from "./agents/signal-materializer-agent";
-export { EnrichmentAgent } from "./agents/enrichment-agent";
-
-// Export the Worker with fetch and scheduled handlers
+// Export the Worker with fetch, scheduled, and queue handlers
 export default {
 	fetch: app.fetch,
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
@@ -100,5 +96,22 @@ export default {
 				logger.error(`Cron job "${job.name}" failed`, { error: err instanceof Error ? err : new Error(String(err)) });
 			})
 		);
+	},
+	async queue(batch: MessageBatch<QueueMessage>, env: Env): Promise<void> {
+		const logger = new Logger(env.LOG_LEVEL);
+		const handlers = buildQueueHandlers(env, logger);
+
+		for (const msg of batch.messages) {
+			try {
+				await routeQueueMessage(msg.body, handlers);
+				msg.ack();
+			} catch (err) {
+				logger.error("Queue message processing failed", {
+					messageType: msg.body.type,
+					error: err instanceof Error ? err.message : String(err),
+				});
+				msg.retry();
+			}
+		}
 	},
 };

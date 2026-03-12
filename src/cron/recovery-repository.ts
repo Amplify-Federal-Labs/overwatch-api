@@ -1,4 +1,5 @@
 import type { PipelineStatus } from "./recovery";
+import type { UnresolvedEntity } from "./run-recovery";
 
 const ENRICHABLE_TYPES = ["person", "agency", "company"];
 
@@ -10,6 +11,18 @@ export class RecoveryRepository {
 			.prepare("SELECT COUNT(*) as count FROM observation_entities WHERE entity_profile_id IS NULL")
 			.first<{ count: number }>();
 		return row?.count ?? 0;
+	}
+
+	async findUnresolvedObservationEntities(): Promise<UnresolvedEntity[]> {
+		const { results } = await this.db
+			.prepare(
+				`SELECT observation_id AS observationId, raw_name AS rawName, entity_type AS entityType, role
+				 FROM observation_entities
+				 WHERE entity_profile_id IS NULL
+				 ORDER BY observation_id`,
+			)
+			.all<UnresolvedEntity>();
+		return results;
 	}
 
 	async countUnsynthesizedProfiles(): Promise<number> {

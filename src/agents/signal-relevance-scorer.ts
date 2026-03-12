@@ -1,30 +1,18 @@
 import OpenAI from "openai";
 import { jsonrepair } from "jsonrepair";
-import { CompetencyCodeEnum, type CompetencyCode } from "../schemas";
+import { CompetencyCodeEnum } from "../schemas";
+import type { CompetencyCode } from "../domain/types";
+import type {
+	RelevanceScoringService,
+	RelevanceInput,
+	RelevanceResult,
+	RelevanceObservation,
+	RelevanceEntityContext,
+} from "../services/relevance-scoring";
 
-export interface ObservationSummary {
-	type: string;
-	summary: string;
-	entities: { type: string; name: string; role: string }[];
-}
-
-export interface EntityContextItem {
-	name: string;
-	type: string;
-	summary: string | null;
-}
-
-export interface RelevanceInput {
-	content: string;
-	observations: ObservationSummary[];
-	entityContext: EntityContextItem[];
-}
-
-export interface RelevanceResult {
-	relevanceScore: number;
-	rationale: string;
-	competencyCodes: CompetencyCode[];
-}
+export type { RelevanceInput, RelevanceResult };
+export type ObservationSummary = RelevanceObservation;
+export type EntityContextItem = RelevanceEntityContext;
 
 const VALID_COMPETENCY_CODES: ReadonlySet<string> = new Set(CompetencyCodeEnum.options);
 
@@ -128,7 +116,7 @@ export function buildRelevanceContext(input: RelevanceInput): string {
 	return parts.join("\n");
 }
 
-export class SignalRelevanceScorer {
+export class SignalRelevanceScorer implements RelevanceScoringService {
 	private client: OpenAI;
 	private model: string;
 

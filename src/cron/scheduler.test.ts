@@ -4,7 +4,7 @@ vi.mock("agents", () => ({
 	getAgentByName: vi.fn(),
 }));
 
-import { getScheduledJob, findJobByName, INGESTION_SCHEDULE, ON_DEMAND_JOBS } from "./scheduler";
+import { getScheduledJob, findJobByName, INGESTION_SCHEDULE, ON_DEMAND_JOBS, dispatchOnDemandJob } from "./scheduler";
 
 describe("INGESTION_SCHEDULE", () => {
 	it("has three ingestion jobs at hours 0, 1, 2", () => {
@@ -55,6 +55,98 @@ describe("ON_DEMAND_JOBS", () => {
 		expect(ON_DEMAND_JOBS.get("synthesis")).toEqual({ name: "synthesis", kind: "agent", agentName: "synthesis" });
 		expect(ON_DEMAND_JOBS.get("signal_materialization")).toEqual({ name: "signal_materialization", kind: "agent", agentName: "signal_materialization" });
 		expect(ON_DEMAND_JOBS.get("enrichment")).toEqual({ name: "enrichment", kind: "agent", agentName: "enrichment" });
+	});
+});
+
+describe("dispatchOnDemandJob", () => {
+	it("queries DB for unsynthesized profiles and produces synthesis messages", async () => {
+		const mockQueue = { send: vi.fn().mockResolvedValue(undefined) };
+		const deps = {
+			synthesisQueue: mockQueue,
+			enrichmentQueue: { send: vi.fn() },
+			materializationQueue: { send: vi.fn() },
+			findUnsynthesizedProfileIds: vi.fn().mockResolvedValue(["p-1", "p-2"]),
+			findPendingEnrichmentProfiles: vi.fn(),
+			findUnmaterializedItemIds: vi.fn(),
+		};
+
+		const result = await dispatchOnDemandJob("synthesis", deps);
+
+		expect(result.messagesProduced).toBe(2);
+		expect(mockQueue.send).toHaveBeenCalledTimes(2);
+		expect(mockQueue.send).toHaveBeenCalledWith({ type: "synthesis", profileId: "p-1" });
+		expect(mockQueue.send).toHaveBeenCalledWith({ type: "synthesis", profileId: "p-2" });
+	});
+
+	it("queries DB for pending enrichment profiles and produces enrichment messages", async () => {
+		const mockQueue = { send: vi.fn().mockResolvedValue(undefined) };
+		const deps = {
+			synthesisQueue: { send: vi.fn() },
+			enrichmentQueue: mockQueue,
+			materializationQueue: { send: vi.fn() },
+			findUnsynthesizedProfileIds: vi.fn(),
+			findPendingEnrichmentProfiles: vi.fn().mockResolvedValue([
+				{ id: "p-1", type: "person", canonicalName: "John Smith" },
+			]),
+			findUnmaterializedItemIds: vi.fn(),
+		};
+
+		const result = await dispatchOnDemandJob("enrichment", deps);
+
+		expect(result.messagesProduced).toBe(1);
+		expect(mockQueue.send).toHaveBeenCalledWith({
+			type: "enrichment",
+			profileId: "p-1",
+			entityType: "person",
+			canonicalName: "John Smith",
+		});
+	});
+
+	it("queries DB for unmaterialized items and produces materialization messages", async () => {
+		const mockQueue = { send: vi.fn().mockResolvedValue(undefined) };
+		const deps = {
+			synthesisQueue: { send: vi.fn() },
+			enrichmentQueue: { send: vi.fn() },
+			materializationQueue: mockQueue,
+			findUnsynthesizedProfileIds: vi.fn(),
+			findPendingEnrichmentProfiles: vi.fn(),
+			findUnmaterializedItemIds: vi.fn().mockResolvedValue(["item-1", "item-2", "item-3"]),
+		};
+
+		const result = await dispatchOnDemandJob("signal_materialization", deps);
+
+		expect(result.messagesProduced).toBe(3);
+		expect(mockQueue.send).toHaveBeenCalledWith({ type: "materialization", ingestedItemId: "item-1" });
+	});
+
+	it("returns zero when no pending work found", async () => {
+		const deps = {
+			synthesisQueue: { send: vi.fn() },
+			enrichmentQueue: { send: vi.fn() },
+			materializationQueue: { send: vi.fn() },
+			findUnsynthesizedProfileIds: vi.fn().mockResolvedValue([]),
+			findPendingEnrichmentProfiles: vi.fn(),
+			findUnmaterializedItemIds: vi.fn(),
+		};
+
+		const result = await dispatchOnDemandJob("synthesis", deps);
+
+		expect(result.messagesProduced).toBe(0);
+	});
+
+	it("throws for entity_resolution (not supported as on-demand queue dispatch)", async () => {
+		const deps = {
+			synthesisQueue: { send: vi.fn() },
+			enrichmentQueue: { send: vi.fn() },
+			materializationQueue: { send: vi.fn() },
+			findUnsynthesizedProfileIds: vi.fn(),
+			findPendingEnrichmentProfiles: vi.fn(),
+			findUnmaterializedItemIds: vi.fn(),
+		};
+
+		await expect(dispatchOnDemandJob("entity_resolution", deps)).rejects.toThrow(
+			"entity_resolution cannot be triggered on-demand via queues",
+		);
 	});
 });
 

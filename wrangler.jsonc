@@ -21,20 +21,22 @@
 			"database_id": "8f422500-2a40-4ce9-b4d4-4a2965144a94"
 		}
 	],
-	"durable_objects": {
-		"bindings": [
-			{ "name": "OBSERVATION_EXTRACTOR", "class_name": "ObservationExtractorAgent" },
-			{ "name": "ENTITY_RESOLVER", "class_name": "EntityResolverAgent" },
-			{ "name": "SYNTHESIS", "class_name": "SynthesisAgent" },
-			{ "name": "SIGNAL_MATERIALIZER", "class_name": "SignalMaterializerAgent" },
-			{ "name": "ENRICHMENT", "class_name": "EnrichmentAgent" }
+	"queues": {
+		"producers": [
+			{ "queue": "overwatch-ingestion", "binding": "INGESTION_QUEUE" },
+			{ "queue": "overwatch-extraction", "binding": "EXTRACTION_QUEUE" },
+			{ "queue": "overwatch-resolution", "binding": "RESOLUTION_QUEUE" },
+			{ "queue": "overwatch-synthesis", "binding": "SYNTHESIS_QUEUE" },
+			{ "queue": "overwatch-enrichment", "binding": "ENRICHMENT_QUEUE" },
+			{ "queue": "overwatch-materialization", "binding": "MATERIALIZATION_QUEUE" }
+		],
+		"consumers": [
+			{ "queue": "overwatch-ingestion", "max_batch_size": 1, "max_retries": 3, "dead_letter_queue": "overwatch-dlq" },
+			{ "queue": "overwatch-extraction", "max_batch_size": 5, "max_retries": 3, "dead_letter_queue": "overwatch-dlq" },
+			{ "queue": "overwatch-resolution", "max_batch_size": 10, "max_retries": 3, "dead_letter_queue": "overwatch-dlq" },
+			{ "queue": "overwatch-synthesis", "max_batch_size": 5, "max_retries": 3, "dead_letter_queue": "overwatch-dlq" },
+			{ "queue": "overwatch-enrichment", "max_batch_size": 1, "max_retries": 3, "dead_letter_queue": "overwatch-dlq" },
+			{ "queue": "overwatch-materialization", "max_batch_size": 10, "max_retries": 3, "dead_letter_queue": "overwatch-dlq" }
 		]
-	},
-	"migrations": [
-		{ "tag": "v1", "new_sqlite_classes": ["ObservationExtractorAgent"] },
-		{ "tag": "v2", "new_sqlite_classes": ["EntityResolverAgent"] },
-		{ "tag": "v3", "new_sqlite_classes": ["SynthesisAgent"] },
-		{ "tag": "v4", "new_sqlite_classes": ["SignalMaterializerAgent"] },
-		{ "tag": "v5", "new_sqlite_classes": ["EnrichmentAgent"] }
-	]
+	}
 }

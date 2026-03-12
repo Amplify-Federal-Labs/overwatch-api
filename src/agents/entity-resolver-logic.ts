@@ -1,4 +1,4 @@
-import type { EntityResolver, ResolutionResult } from "./entity-resolver";
+import type { EntityResolver, MatchableProfile, ResolutionResult } from "./entity-resolver";
 import type { UnresolvedGroup } from "../db/entity-profile-repository";
 
 export interface ResolveGroupsRepository {
@@ -18,28 +18,10 @@ export interface ResolveGroupsLogger {
 	debug(msg: string, meta?: Record<string, unknown>): void;
 }
 
-export interface ProfileWithAliases {
-	id: string;
-	canonicalName: string;
-	type: string;
-	aliases: string[];
-	firstSeenAt: string;
-	lastSeenAt: string;
-	observationCount: number;
-	summary: string | null;
-	trajectory: string | null;
-	relevanceScore: number | null;
-	lastSynthesizedAt: string | null;
-	dossier: unknown;
-	enrichmentStatus: string;
-	lastEnrichedAt: string | null;
-	createdAt: string;
-}
-
 export interface ResolveGroupsDeps {
 	resolver: EntityResolver;
 	repository: ResolveGroupsRepository;
-	existingProfiles: ProfileWithAliases[];
+	existingProfiles: MatchableProfile[];
 	logger: ResolveGroupsLogger;
 }
 
@@ -72,22 +54,14 @@ export async function resolveGroups(
 				profileId = await repository.createProfile(group.entityType, group.mostCommonRawName);
 				newProfilesCreated++;
 				newProfileIds.push(profileId);
+				const canonicalName = group.mostCommonRawName;
 				existingProfiles.push({
 					id: profileId,
-					canonicalName: group.mostCommonRawName,
+					canonicalName,
 					type: group.entityType,
-					aliases: [group.mostCommonRawName],
-					firstSeenAt: new Date().toISOString(),
-					lastSeenAt: new Date().toISOString(),
-					observationCount: 0,
-					summary: null,
-					trajectory: null,
-					relevanceScore: null,
-					lastSynthesizedAt: null,
-					dossier: null,
-					enrichmentStatus: "pending",
-					lastEnrichedAt: null,
-					createdAt: new Date().toISOString(),
+					matchesAlias(name: string): boolean {
+						return name.toLowerCase().trim() === canonicalName.toLowerCase().trim();
+					},
 				});
 			}
 

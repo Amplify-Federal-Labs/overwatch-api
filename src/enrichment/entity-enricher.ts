@@ -2,6 +2,7 @@ import type { ProfileForEnrichment, EnrichmentContext } from "../db/enrichment-r
 import type { SearchResult } from "./brave-searcher";
 import type { Dossier } from "../schemas";
 import type { Logger } from "../logger";
+import { isEnrichableType } from "../domain/entity-profile";
 
 export interface EnrichmentDeps {
 	search: (name: string, type: string, context?: EnrichmentContext) => Promise<SearchResult[]>;
@@ -23,7 +24,6 @@ export interface EnrichmentResult {
 }
 
 const BATCH_SIZE = 10;
-const ENRICHABLE_TYPES = new Set(["person", "agency", "company"]);
 
 /**
  * Determines whether the enrichment agent should self-schedule another batch.
@@ -96,7 +96,7 @@ export class EntityEnricher {
 
 		log?.info("Enriching profile", { profileId: profile.id, name: profile.canonicalName, type: profile.type });
 
-		if (!ENRICHABLE_TYPES.has(profile.type)) {
+		if (!isEnrichableType(profile.type)) {
 			log?.info("Skipping non-enrichable entity type", { profileId: profile.id, type: profile.type });
 			await this.deps.markSkipped(profile.id);
 			return "skipped";

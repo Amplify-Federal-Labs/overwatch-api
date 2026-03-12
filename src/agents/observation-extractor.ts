@@ -1,7 +1,6 @@
 import OpenAI from "openai";
 import { jsonrepair } from "jsonrepair";
 import type {
-	SignalAnalysisInput,
 	ObservationExtractionResult,
 	ObservationExtraction,
 	EntityRef,
@@ -11,6 +10,7 @@ import {
 	EntityTypeEnum,
 	EntityRoleEnum,
 } from "../schemas";
+import type { ObservationExtractionService, ObservationExtractionInput } from "../services/observation-extraction";
 
 const SYSTEM_PROMPT = `You are an intelligence analyst. Given content from a government or defense industry source, extract factual observations.
 
@@ -55,7 +55,7 @@ If the content contains no actionable observations, return {"observations": []}.
 
 Return ONLY valid JSON. No markdown fences, no commentary.`;
 
-export class ObservationExtractor {
+export class ObservationExtractor implements ObservationExtractionService {
 	private client: OpenAI;
 	private model: string;
 
@@ -67,7 +67,7 @@ export class ObservationExtractor {
 		this.model = env.CF_AIG_MODEL;
 	}
 
-	async extract(input: SignalAnalysisInput): Promise<ObservationExtractionResult> {
+	async extract(input: ObservationExtractionInput): Promise<ObservationExtractionResult> {
 		const metadataSection = input.sourceMetadata && Object.keys(input.sourceMetadata).length > 0
 			? `\n\nStructured Metadata:\n${Object.entries(input.sourceMetadata).map(([k, v]) => `${k}: ${v}`).join("\n")}`
 			: "";

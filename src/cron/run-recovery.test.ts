@@ -1,29 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-
-const mockGetAgentByName = vi.fn();
-vi.mock("agents", () => ({
-	getAgentByName: (...args: unknown[]) => mockGetAgentByName(...args),
-}));
-
-import { runRecovery, type RecoveryResult } from "./run-recovery";
+import { runRecovery } from "./run-recovery";
 import type { PipelineStatus } from "./recovery";
+import type { RecoveryDeps } from "./run-recovery";
 
-function createMockEnv(overrides: Partial<Env> = {}): Env {
+function makeDeps(overrides: Partial<RecoveryDeps> = {}): RecoveryDeps {
 	return {
-		DB: {} as D1Database,
-		OBSERVATION_EXTRACTOR: {} as DurableObjectNamespace,
-		ENTITY_RESOLVER: {} as DurableObjectNamespace,
-		SYNTHESIS: {} as DurableObjectNamespace,
-		SIGNAL_MATERIALIZER: {} as DurableObjectNamespace,
-		ENRICHMENT: {} as DurableObjectNamespace,
-		CF_AIG_TOKEN: "",
-		CF_AIG_BASEURL: "",
-		CF_AIG_MODEL: "",
-		BRAVE_SEARCH_API_KEY: "",
-		SAM_GOV_API_KEY: "",
-		LOG_LEVEL: "ERROR",
+		dispatchOnDemandJob: vi.fn().mockResolvedValue({ messagesProduced: 0 }),
+		findUnresolvedObservationEntities: vi.fn().mockResolvedValue([]),
+		resolutionQueue: { send: vi.fn().mockResolvedValue(undefined) },
+		logger: {
+			info: vi.fn(),
+			warn: vi.fn(),
+			error: vi.fn(),
+			debug: vi.fn(),
+		},
 		...overrides,
-	} as Env;
+	};
 }
 
 describe("runRecovery", () => {
@@ -32,110 +24,132 @@ describe("runRecovery", () => {
 	});
 
 	it("returns empty result when pipeline is healthy", async () => {
-		const healthyStatus: PipelineStatus = {
+		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
 			unsynthesizedProfileCount: 0,
 			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
+		const deps = makeDeps();
 
-		const result = await runRecovery(createMockEnv(), healthyStatus);
+		const result = await runRecovery(status, deps);
 
 		expect(result.stuckStages).toEqual([]);
 		expect(result.recoveryActions).toEqual([]);
-		expect(mockGetAgentByName).not.toHaveBeenCalled();
+		expect(deps.dispatchOnDemandJob).not.toHaveBeenCalled();
 	});
 
-	it("kicks entity resolver when entities are unresolved", async () => {
-		const status: PipelineStatus = {
-			unresolvedEntityCount: 5,
-			unsynthesizedProfileCount: 0,
-			pendingEnrichmentCount: 0,
-			unmaterializedItemCount: 0,
-		};
-
-		const mockAgent = { runResolution: vi.fn().mockResolvedValue({}) };
-		mockGetAgentByName.mockResolvedValue(mockAgent);
-
-		const result = await runRecovery(createMockEnv(), status);
-
-		expect(result.recoveryActions).toHaveLength(1);
-		expect(result.recoveryActions[0].agentName).toBe("entity_resolution");
-		expect(result.recoveryActions[0].status).toBe("dispatched");
-		expect(mockAgent.runResolution).toHaveBeenCalledOnce();
-	});
-
-	it("kicks synthesis agent with empty array (agent queries DB)", async () => {
+	it("dispatches synthesis via dispatchOnDemandJob", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
-			unsynthesizedProfileCount: 2,
+			unsynthesizedProfileCount: 3,
 			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
+		const deps = makeDeps({
+			dispatchOnDemandJob: vi.fn().mockResolvedValue({ messagesProduced: 3 }),
+		});
 
-		const mockAgent = { synthesizeProfiles: vi.fn().mockResolvedValue({}) };
-		mockGetAgentByName.mockResolvedValue(mockAgent);
-
-		const result = await runRecovery(createMockEnv(), status);
+		const result = await runRecovery(status, deps);
 
 		expect(result.recoveryActions).toHaveLength(1);
 		expect(result.recoveryActions[0].agentName).toBe("synthesis");
-		expect(mockAgent.synthesizeProfiles).toHaveBeenCalledWith([]);
+		expect(result.recoveryActions[0].status).toBe("dispatched");
+		expect(deps.dispatchOnDemandJob).toHaveBeenCalledWith("synthesis");
 	});
 
-	it("kicks enrichment agent with empty array (agent queries DB)", async () => {
+	it("dispatches enrichment via dispatchOnDemandJob", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
 			unsynthesizedProfileCount: 0,
 			pendingEnrichmentCount: 2,
 			unmaterializedItemCount: 0,
 		};
+		const deps = makeDeps({
+			dispatchOnDemandJob: vi.fn().mockResolvedValue({ messagesProduced: 2 }),
+		});
 
-		const mockAgent = { enrichProfiles: vi.fn().mockResolvedValue({}) };
-		mockGetAgentByName.mockResolvedValue(mockAgent);
-
-		const result = await runRecovery(createMockEnv(), status);
+		const result = await runRecovery(status, deps);
 
 		expect(result.recoveryActions).toHaveLength(1);
 		expect(result.recoveryActions[0].agentName).toBe("enrichment");
-		expect(mockAgent.enrichProfiles).toHaveBeenCalledWith([]);
+		expect(deps.dispatchOnDemandJob).toHaveBeenCalledWith("enrichment");
 	});
 
-	it("kicks signal materializer when items are unmaterialized", async () => {
+	it("dispatches signal_materialization via dispatchOnDemandJob", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 0,
 			unsynthesizedProfileCount: 0,
 			pendingEnrichmentCount: 0,
-			unmaterializedItemCount: 3,
+			unmaterializedItemCount: 5,
 		};
+		const deps = makeDeps({
+			dispatchOnDemandJob: vi.fn().mockResolvedValue({ messagesProduced: 5 }),
+		});
 
-		const mockAgent = { materializeNew: vi.fn().mockResolvedValue({}) };
-		mockGetAgentByName.mockResolvedValue(mockAgent);
-
-		const result = await runRecovery(createMockEnv(), status);
+		const result = await runRecovery(status, deps);
 
 		expect(result.recoveryActions).toHaveLength(1);
 		expect(result.recoveryActions[0].agentName).toBe("signal_materialization");
-		expect(mockAgent.materializeNew).toHaveBeenCalledOnce();
+		expect(deps.dispatchOnDemandJob).toHaveBeenCalledWith("signal_materialization");
 	});
 
-	it("kicks multiple agents when pipeline is broken at several points", async () => {
+	it("recovers entity_resolution by producing resolution queue messages", async () => {
+		const status: PipelineStatus = {
+			unresolvedEntityCount: 3,
+			unsynthesizedProfileCount: 0,
+			pendingEnrichmentCount: 0,
+			unmaterializedItemCount: 0,
+		};
+		const sendFn = vi.fn().mockResolvedValue(undefined);
+		const deps = makeDeps({
+			findUnresolvedObservationEntities: vi.fn().mockResolvedValue([
+				{ observationId: 10, rawName: "DISA", entityType: "agency", role: "buyer" },
+				{ observationId: 10, rawName: "John Smith", entityType: "person", role: "poc" },
+				{ observationId: 20, rawName: "Booz Allen", entityType: "company", role: "vendor" },
+			]),
+			resolutionQueue: { send: sendFn },
+		});
+
+		const result = await runRecovery(status, deps);
+
+		expect(result.recoveryActions).toHaveLength(1);
+		expect(result.recoveryActions[0].agentName).toBe("entity_resolution");
+		expect(result.recoveryActions[0].status).toBe("dispatched");
+		// Should group by observationId and send one message per observation
+		expect(sendFn).toHaveBeenCalledTimes(2);
+		expect(sendFn).toHaveBeenCalledWith({
+			type: "resolution",
+			observationId: 10,
+			entities: [
+				{ rawName: "DISA", entityType: "agency", role: "buyer" },
+				{ rawName: "John Smith", entityType: "person", role: "poc" },
+			],
+		});
+		expect(sendFn).toHaveBeenCalledWith({
+			type: "resolution",
+			observationId: 20,
+			entities: [
+				{ rawName: "Booz Allen", entityType: "company", role: "vendor" },
+			],
+		});
+	});
+
+	it("dispatches multiple agents when pipeline is broken at several points", async () => {
 		const status: PipelineStatus = {
 			unresolvedEntityCount: 2,
 			unsynthesizedProfileCount: 1,
 			pendingEnrichmentCount: 1,
 			unmaterializedItemCount: 1,
 		};
+		const deps = makeDeps({
+			dispatchOnDemandJob: vi.fn().mockResolvedValue({ messagesProduced: 1 }),
+			findUnresolvedObservationEntities: vi.fn().mockResolvedValue([
+				{ observationId: 10, rawName: "DISA", entityType: "agency", role: "buyer" },
+			]),
+		});
 
-		const mockAgent = {
-			runResolution: vi.fn().mockResolvedValue({}),
-			synthesizeProfiles: vi.fn().mockResolvedValue({}),
-			enrichProfiles: vi.fn().mockResolvedValue({}),
-			materializeNew: vi.fn().mockResolvedValue({}),
-		};
-		mockGetAgentByName.mockResolvedValue(mockAgent);
-
-		const result = await runRecovery(createMockEnv(), status);
+		const result = await runRecovery(status, deps);
 
 		expect(result.recoveryActions).toHaveLength(4);
 		expect(result.recoveryActions.map((a) => a.agentName)).toEqual([
@@ -144,22 +158,24 @@ describe("runRecovery", () => {
 			"enrichment",
 			"signal_materialization",
 		]);
+		expect(result.recoveryActions.every((a) => a.status === "dispatched")).toBe(true);
 	});
 
-	it("records failed status when agent dispatch throws", async () => {
+	it("records failed status when dispatch throws", async () => {
 		const status: PipelineStatus = {
-			unresolvedEntityCount: 5,
-			unsynthesizedProfileCount: 0,
+			unresolvedEntityCount: 0,
+			unsynthesizedProfileCount: 3,
 			pendingEnrichmentCount: 0,
 			unmaterializedItemCount: 0,
 		};
+		const deps = makeDeps({
+			dispatchOnDemandJob: vi.fn().mockRejectedValue(new Error("queue unavailable")),
+		});
 
-		mockGetAgentByName.mockRejectedValue(new Error("DO unavailable"));
-
-		const result = await runRecovery(createMockEnv(), status);
+		const result = await runRecovery(status, deps);
 
 		expect(result.recoveryActions).toHaveLength(1);
 		expect(result.recoveryActions[0].status).toBe("failed");
-		expect(result.recoveryActions[0].error).toBe("DO unavailable");
+		expect(result.recoveryActions[0].error).toBe("queue unavailable");
 	});
 });

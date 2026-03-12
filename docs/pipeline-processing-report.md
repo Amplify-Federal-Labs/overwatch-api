@@ -5,49 +5,64 @@ This document traces the complete lifecycle of an ingested item through the Over
 ## Pipeline Overview
 
 ```
-                          CRON (daily, fixed hours 0-2 UTC)
-                          0:rss -> 1:sam_gov -> 2:fpds
+                          CRON (hourly, 0 * * * *)
+                          0:rss -> 1:sam_gov -> 2:fpds -> 3+:recovery
                                   |
                                   v
+                     INGESTION_QUEUE (max_batch: 1)
                   +-------------------------------+
-                  | ObservationExtractorAgent      |
-                  | (Cloudflare Durable Object)    |
+                  | ingestion-consumer             |
+                  |                                |
+                  | Per source type:               |
+                  |  1. Fetch raw content           |
+                  |  2. Dedup by source_link        |
+                  |  3. Store ingested items        |
+                  |  4. Produce ExtractionMessages  |
+                  +-------------------------------+
+                                  |
+                                  v
+                     EXTRACTION_QUEUE (max_batch: 5)
+                  +-------------------------------+
+                  | extraction-consumer            |
                   |                                |
                   | Per item:                      |
-                  |  1. Store ingested item        |
-                  |  2. AI extract observations    |
-                  |  3. Fetch source page          |
-                  |  4. AI score relevance         |
-                  |  5. Store relevance score      |
+                  |  1. AI extract observations     |
+                  |  2. Fetch source page           |
+                  |  3. AI score relevance          |
+                  |  4. Store relevance score       |
                   +-------------------------------+
                                   |
                           score >= threshold?
                          /                \
                        No                  Yes
                        |                    |
-                    (stored               queue()
-                   for audit)               |
+                    (stored          produce ResolutionMessages
+                   for audit)        (1 per observation)
+                                            |
                                             v
+                     RESOLUTION_QUEUE (max_batch: 10)
                   +-------------------------------+
-                  | EntityResolverAgent            |
-                  | (Cloudflare Durable Object)    |
+                  | resolution-consumer            |
                   +-------------------------------+
                            /              \
-                  queue()              queue()
-                  (resolvedProfileIds)     (newProfileIds)
+           produce                  produce
+           SynthesisMessages        EnrichmentMessages
+           (resolvedProfileIds)     (newProfileIds, enrichable only)
                          /                  \
                         v                    v
-         +-------------------------+  +-------------------------+
-         | SynthesisAgent          |  | EnrichmentAgent         |
-         | (Cloudflare Durable Obj)|  | (Cloudflare Durable Obj)|
-         +-------------------------+  +-------------------------+
+       SYNTHESIS_QUEUE          ENRICHMENT_QUEUE
+       (max_batch: 5)           (max_batch: 1)
+  +-------------------------+  +-------------------------+
+  | synthesis-consumer      |  | enrichment-consumer     |
+  +-------------------------+  +-------------------------+
                         |
-                queue()
+         produce MaterializationMessages
+         (per ingested item linked to profile)
                         |
                         v
+       MATERIALIZATION_QUEUE (max_batch: 10)
          +-------------------------------+
-         | SignalMaterializerAgent        |
-         | (Cloudflare Durable Object)   |
+         | materialization-consumer       |
          +-------------------------------+
                         |
                         v
@@ -55,23 +70,61 @@ This document traces the complete lifecycle of an ingested item through the Over
                   (GET /signals)
 ```
 
-## Stage 1: Ingestion + Early Relevance Gate (Cron-Triggered)
+## Architecture: Cloudflare Queues
 
-**Trigger**: Cloudflare Workers cron fires once daily per source (`0 0-2 * * *`). The scheduler (`src/cron/scheduler.ts`) maps fixed UTC hours to ingestion jobs:
+The pipeline uses **Cloudflare Queues** for all inter-stage communication. Each stage is a queue consumer function with dependency-injected collaborators, wired in `src/queues/build-handlers.ts`.
+
+**6 queues** (configured in `wrangler.jsonc`):
+
+| Queue | Binding | max_batch_size | DLQ |
+|-------|---------|---------------|-----|
+| `overwatch-ingestion` | `INGESTION_QUEUE` | 1 | `overwatch-dlq` |
+| `overwatch-extraction` | `EXTRACTION_QUEUE` | 5 | `overwatch-dlq` |
+| `overwatch-resolution` | `RESOLUTION_QUEUE` | 10 | `overwatch-dlq` |
+| `overwatch-synthesis` | `SYNTHESIS_QUEUE` | 5 | `overwatch-dlq` |
+| `overwatch-enrichment` | `ENRICHMENT_QUEUE` | 1 | `overwatch-dlq` |
+| `overwatch-materialization` | `MATERIALIZATION_QUEUE` | 10 | `overwatch-dlq` |
+
+All queues have `max_retries: 3` with a dead-letter queue (`overwatch-dlq`).
+
+**Message granularity**: 1 message = 1 unit of work. Messages are typed as a discriminated union on the `type` field (`src/queues/types.ts`):
+
+```typescript
+type QueueMessage =
+  | IngestionMessage      // { type: "ingestion", source: SignalSourceType }
+  | ExtractionMessage     // { type: "extraction", ingestedItemId: string }
+  | ResolutionMessage     // { type: "resolution", observationId: number, entities: [...] }
+  | SynthesisMessage      // { type: "synthesis", profileId: string }
+  | EnrichmentMessage     // { type: "enrichment", profileId, entityType, canonicalName }
+  | MaterializationMessage // { type: "materialization", ingestedItemId: string }
+```
+
+**Queue handler** (`src/index.ts`): The Worker's `queue()` export builds handlers once per batch via `buildQueueHandlers(env, logger)`, then routes each message through `routeQueueMessage()`. Successful messages are ack'd; failures are retried (up to 3 times, then DLQ).
+
+**Queue router** (`src/queues/queue-router.ts`): Switches on `message.type` and dispatches to the appropriate handler function.
+
+---
+
+## Stage 1: Ingestion (Cron-Triggered → INGESTION_QUEUE)
+
+**Trigger**: Cloudflare Workers cron fires hourly (`0 * * * *`). The scheduler (`src/cron/scheduler.ts`) maps fixed UTC hours to ingestion jobs:
 
 | UTC Hour | Job     | Source           |
 |----------|---------|------------------|
 | 0 (midnight) | `rss`     | GovConWire, FedScoop RSS feeds |
 | 1           | `sam_gov` | SAM.gov opportunities + APBI events |
 | 2           | `fpds`    | FPDS.gov ATOM feed (DoD contract awards) |
+| 3+          | `recovery` | Pipeline recovery (see Recovery section) |
 
-**Agent**: `ObservationExtractorAgent` (`src/agents/observation-extractor-agent.ts`)
+**Cron handler**: `runCronJob()` sends an `IngestionMessage` to `INGESTION_QUEUE`.
 
-**What happens per item** (implemented in `processItem()`):
+**Consumer**: `handleIngestion()` (`src/queues/ingestion-consumer.ts`)
+
+**What happens**:
 
 ### 1a. Fetch raw content
 
-The agent dispatches to source-specific fetchers based on `sourceType`:
+The consumer dispatches to source-specific fetchers based on `source`:
 
 | Source | Fetcher | Parser | Output |
 |--------|---------|--------|--------|
@@ -102,9 +155,21 @@ ingested_items
 
 **Deduplication**: If `source_link` already exists in the table, the item is skipped (returns `null`).
 
-### 1c. AI observation extraction
+### 1c. Produce ExtractionMessages
 
-For each newly stored item, the `ObservationExtractor` (`src/agents/observation-extractor.ts`) calls Cloudflare Workers AI to extract typed observations.
+For each newly stored item, the consumer sends an `ExtractionMessage` to `EXTRACTION_QUEUE` with the `ingestedItemId`.
+
+---
+
+## Stage 2: Extraction (EXTRACTION_QUEUE)
+
+**Consumer**: `handleExtraction()` (`src/queues/extraction-consumer.ts`)
+
+**What happens per item**:
+
+### 2a. AI observation extraction
+
+The `ObservationExtractor` (`src/agents/observation-extractor.ts`) calls Cloudflare Workers AI to extract typed observations.
 
 **AI model**: Configured via `CF_AIG_MODEL` env var, accessed through OpenAI-compatible client at `CF_AIG_BASEURL`.
 
@@ -115,7 +180,7 @@ For each newly stored item, the `ObservationExtractor` (`src/agents/observation-
 - **attributes**: Key-value pairs (dollar amounts, contract numbers, NAICS codes, etc.)
 - **sourceDate**: `YYYY-MM-DD` if known
 
-### 1d. Store observations + entity mentions
+### 2b. Store observations + entity mentions
 
 The repository inserts into two tables:
 
@@ -139,14 +204,14 @@ observation_entities
 └── resolved_at     (NULL until resolved)
 ```
 
-### 1e. Fetch full source page (best-effort)
+### 2c. Fetch full source page (best-effort)
 
 If the item has a `sourceLink`, the `PageFetcher` (`src/enrichment/page-fetcher.ts`) fetches the full page content. This enriches the relevance scorer with more context than just the RSS summary or SAM.gov snippet.
 
 - If `sourceLink` is null, or the fetch fails (e.g., `.mil`/`.gov` bot blocking), scoring proceeds with just the ingested content + observations.
 - The fetched page text is concatenated: `content + "\n\n--- Full source page ---\n" + pageText`
 
-### 1f. AI relevance scoring (Early Gate — ADR-004)
+### 2d. AI relevance scoring (Early Gate — ADR-004)
 
 The `SignalRelevanceScorer` (`src/agents/signal-relevance-scorer.ts`) scores each item's relevance to Amplify Federal. This is the **early relevance gate** — items scoring below the threshold are excluded from all downstream processing.
 
@@ -160,21 +225,17 @@ The `SignalRelevanceScorer` (`src/agents/signal-relevance-scorer.ts`) scores eac
 - **rationale**: 1-2 sentence explanation
 - **competencyCodes**: Array of `A`–`F` mapping to Amplify's competency clusters
 
-### 1g. Persist relevance score
+### 2e. Persist relevance score
 
 The score, rationale, and competency codes are stored on the `ingested_items` row via `ObservationRepository.updateRelevanceScore()`.
 
-### 1h. Relevance gate decision
+### 2f. Relevance gate decision + produce ResolutionMessages
 
 `applyThreshold(score, threshold)` determines if the item passes. The threshold is configurable via `RELEVANCE_THRESHOLD` env var (default: `60`).
 
 **Decision logic**:
-- `score >= threshold` → Item passes gate, downstream processing proceeds
+- `score >= threshold` → Item passes gate. For each observation with entities, the consumer sends a `ResolutionMessage` to `RESOLUTION_QUEUE` containing the `observationId` and its entity mentions.
 - `score < threshold` → Item stops here. Stored with score for audit, but excluded from entity resolution, synthesis, enrichment, and materialization.
-
-### 1i. Chain to next stage (conditional)
-
-**Only if `itemsAboveThreshold > 0`** in the batch, the agent calls `resolver.queue("runResolution", {})` on the EntityResolverAgent. If all items in the batch scored below threshold, no downstream work is triggered.
 
 ```
 Low-relevance items (< 60%):     Stored in ingested_items + observations tables. Queryable for audit.
@@ -185,27 +246,21 @@ High-relevance items (≥ 60%):     Full pipeline: entity resolution → synthes
 
 ---
 
-## Stage 2: Entity Resolution (Task-Chained)
+## Stage 3: Entity Resolution (RESOLUTION_QUEUE)
 
-**Agent**: `EntityResolverAgent` (`src/agents/entity-resolver-agent.ts`)
+**Consumer**: `handleResolution()` (`src/queues/resolution-consumer.ts`)
 
 **Pure logic**: `EntityResolver` (`src/agents/entity-resolver.ts`)
 
 **Repository**: `EntityProfileRepository` (`src/db/entity-profile-repository.ts`)
 
+**Input**: A single `ResolutionMessage` containing one `observationId` and its entity mentions.
+
 **What happens**:
 
-### 2a. Find unresolved entities
+### 3a. Resolve each entity group
 
-Queries `observation_entities` where `entity_profile_id IS NULL` and `resolved_at IS NULL`.
-
-### 2b. Group by normalized name
-
-`groupUnresolvedByName()` clusters unresolved entities by lowercased name. Each group has a `mostCommonRawName`, `entityType`, and list of entity IDs.
-
-### 2c. Resolve each group
-
-For each name group, the resolver attempts to match against existing `entity_profiles` + `entity_aliases`:
+For each entity in the message, the resolver attempts to match against existing `entity_profiles` + `entity_aliases`:
 
 1. **Exact alias match** — Check if any existing profile has this name as an alias
 2. **AI fuzzy match** — If no exact match, call `entity-match-ai` (`src/agents/entity-match-ai.ts`) via Workers AI to determine if the name is a variant of an existing profile (e.g., "BAH" → "Booz Allen Hamilton")
@@ -238,39 +293,34 @@ entity_aliases
 
 After resolution, `observation_entities.entity_profile_id` and `resolved_at` are set.
 
-### 2d. Chain to next stages
+### 3b. Fan-out to downstream queues
 
-If entities were resolved or new profiles created:
-- **All resolved profiles**: `synthesis.queue("synthesizeProfiles", resolvedProfileIds)` — passes all profile IDs that had entities resolved (both new and existing)
-- **New profiles only**: `enrichment.queue("enrichProfiles", newProfileIds)` — passes only newly created profile IDs for enrichment
+The consumer produces messages for two parallel downstream stages:
 
-Both are enqueued as fire-and-forget tasks and run independently (parallel).
+- **All resolved profiles** → `SynthesisMessage` to `SYNTHESIS_QUEUE` (one message per resolved profile ID)
+- **New profiles only (enrichable types)** → `EnrichmentMessage` to `ENRICHMENT_QUEUE` (one message per new profile, only for `person`, `agency`, `company` types)
+
+Both are sent as individual queue messages and processed independently (parallel).
 
 ---
 
-## Stage 3a: Profile Synthesis (Task-Chained, parallel with Enrichment)
+## Stage 4a: Profile Synthesis (SYNTHESIS_QUEUE, parallel with Enrichment)
 
-**Agent**: `SynthesisAgent` (`src/agents/synthesis-agent.ts`)
+**Consumer**: `handleSynthesis()` (`src/queues/synthesis-consumer.ts`)
 
 **Pure logic**: `ProfileSynthesizer` (`src/agents/profile-synthesizer.ts`)
 
 **Repository**: `SynthesisRepository` (`src/db/synthesis-repository.ts`)
 
+**Input**: A single `SynthesisMessage` containing one `profileId`.
+
 **What happens**:
 
-### 3a.1. Receive profile IDs (or self-query)
+### 4a.1. Gather observations for profile
 
-The SynthesisAgent receives profile IDs via `queue("synthesizeProfiles", profileIds)`.
+Queries all observations where this profile's ID appears in `observation_entities.entity_profile_id`.
 
-**Self-query pattern (ADR-004)**: When called with an empty array (recovery or on-demand), the agent queries `SynthesisRepository.findUnsynthesizedProfileIds()` to find profiles where `last_synthesized_at IS NULL AND observation_count > 0`. This avoids callers needing to pass unbounded ID arrays.
-
-Processing is batched to 25 profiles per run.
-
-### 3a.2. Gather observations per profile
-
-For each profile, queries all observations where this profile's ID appears in `observation_entities.entity_profile_id`.
-
-### 3a.3. Build context and synthesize
+### 4a.2. Build context and synthesize
 
 `buildSynthesisContext()` constructs a text prompt listing the entity name, type, and all observations with their types, summaries, attributes, entities, and dates.
 
@@ -280,7 +330,7 @@ The `ProfileSynthesizer` sends this to Workers AI, which returns:
 - **relevanceScore**: 0-100 integer (how relevant to Amplify Federal)
 - **insights**: Array of `{ type, content }` where type is `competitor_assessment`, `stakeholder_briefing`, `agency_landscape`, or `opportunity_alert`
 
-### 3a.4. Update profile and store insights
+### 4a.3. Update profile and store insights
 
 Updates `entity_profiles` with `summary`, `trajectory`, `relevance_score`, `last_synthesized_at`.
 
@@ -297,95 +347,88 @@ insights
 └── created_at
 ```
 
-### 3a.5. Self-scheduling and chaining
+### 4a.4. Produce MaterializationMessages
 
-If more than 25 profile IDs were queued, the agent processes the first 25, then calls `this.queue("synthesizeProfiles", remainingIds)` with the remaining IDs. Self-scheduling only continues if the current batch made progress (processed > 0).
-
-If profiles were processed: `materializer.queue("materializeNew", {})`.
+After synthesis, the consumer finds all `ingested_item_id`s linked to the synthesized profile and sends a `MaterializationMessage` to `MATERIALIZATION_QUEUE` for each one.
 
 ---
 
-## Stage 3b: Entity Enrichment (Task-Chained, parallel with Synthesis)
+## Stage 4b: Entity Enrichment (ENRICHMENT_QUEUE, parallel with Synthesis)
 
-**Agent**: `EnrichmentAgent` (`src/agents/enrichment-agent.ts`)
+**Consumer**: `handleEnrichment()` (`src/queues/enrichment-consumer.ts`)
 
-**Pure logic**: `EntityEnricher` (`src/enrichment/entity-enricher.ts`)
+**Input**: A single `EnrichmentMessage` containing `profileId`, `entityType`, and `canonicalName`.
 
 **What happens**:
 
-### 3b.1. Receive profile IDs (or self-query)
+### 4b.1. Load enrichment context
 
-The EnrichmentAgent receives profile IDs via `queue("enrichProfiles", profileIds)`.
+`EnrichmentRepository.findContextForProfile()` queries co-occurring entities from shared observations, providing context for more targeted searches (e.g., `"Michael T. Geegan" "Department of the Army"` instead of generic `Michael T. Geegan defense government official`).
 
-**Self-query pattern (ADR-004)**: When called with an empty array (recovery or on-demand), the agent queries `EnrichmentRepository.findPendingProfileIds()` to find profiles where `enrichment_status = 'pending' AND type IN ('person', 'agency', 'company')`. This avoids callers needing to pass unbounded ID arrays.
+### 4b.2. Search for information
 
-Processing is batched to 10 profiles per run.
-
-### 3b.2. Search for information
-
-`BraveSearcher` (`src/enrichment/brave-searcher.ts`) queries the Brave Search API with site filters:
+`BraveSearcher` (`src/enrichment/brave-searcher.ts`) queries the Brave Search API with context-aware queries and site filters:
 - **Persons**: `site:linkedin.com`, `site:mil.gov`, `site:defense.gov`
 - **Agencies**: `site:mil.gov`, `site:defense.gov`, `site:gov`
 
-### 3b.3. Fetch and extract pages
+### 4b.3. Fetch and extract pages
 
 `PageFetcher` (`src/enrichment/page-fetcher.ts`) retrieves full page text from top search results.
 
-### 3b.4. AI dossier extraction
+### 4b.4. AI dossier extraction
 
-`DossierExtractor` (`src/enrichment/dossier-extractor.ts`) sends page content to Workers AI to extract a structured `Dossier` object (biographical info, role, organization, etc.).
+`DossierExtractor` (`src/enrichment/dossier-extractor.ts`) sends page content to Workers AI to extract a structured `Dossier` object.
 
-### 3b.5. Store enrichment results
+**Dossier types** (discriminated union on `kind`):
+- `PersonDossier` — title, org, branch, programs, rank, education, careerHistory, focusAreas, decorations
+- `AgencyDossier` — mission, branch, programs, parentOrg, leadership, focusAreas
+- `CompanyDossier` — description, coreCapabilities, keyContracts, keyCustomers, leadership, headquarters
+
+### 4b.5. Store enrichment results
 
 Updates `entity_profiles.dossier` (JSON), sets `enrichment_status = 'enriched'`, updates `last_enriched_at`.
 
-### 3b.6. Self-scheduling for batches
+**Outcome tracking**: The consumer returns one of three outcomes:
+- `"enriched"` — dossier extracted and saved
+- `"skipped"` — no search results or no pages fetched
+- `"failed"` — AI extraction returned null or an error occurred
 
-If more than 10 profile IDs were queued, the agent processes the first 10, then calls `this.queue("enrichProfiles", remainingIds)` with the remaining IDs (FIFO, avoids timeout on large batches). Self-scheduling only continues if the current batch made progress (enriched > 0) to avoid infinite loops. Enrichment does NOT chain to any downstream agent.
+Enrichment does NOT chain to any downstream stage.
 
 ---
 
-## Stage 4: Signal Materialization (Task-Chained, terminal)
+## Stage 5: Signal Materialization (MATERIALIZATION_QUEUE, terminal)
 
-**Agent**: `SignalMaterializerAgent` (`src/agents/signal-materializer-agent.ts`)
+**Consumer**: `handleMaterialization()` (`src/queues/materialization-consumer.ts`)
 
 **Pure logic**: `materializeSignal()` (`src/agents/signal-materializer.ts`)
 
 **Repository**: `SignalRepository` (`src/db/signal-repository.ts`)
 
+**Input**: A single `MaterializationMessage` containing one `ingestedItemId`.
+
 **What happens**:
 
-### 4a. Find unmaterialized items (with threshold filter)
+### 5a. Load item with observations
 
-`ObservationRepository.findUnmaterializedItems(batchSize, threshold)` queries for `ingested_items` that:
-- Have at least one row in `observations` (AI extraction succeeded)
-- Do NOT have a corresponding row in `signals` (not yet materialized)
-- Have `relevance_score IS NULL` (legacy items) OR `relevance_score >= threshold`
+Loads the ingested item and its observations from the database. If not found, returns early.
 
-Items that scored below threshold at ingestion time are excluded from materialization. Legacy items (pre-ADR-004, `relevance_score IS NULL`) are still included and scored at this stage.
-
-Batch size: 10 items per run.
-
-### 4b. Relevance scoring (stored score or legacy fallback)
+### 5b. Relevance scoring (stored score or legacy fallback)
 
 The materializer uses a two-tier relevance strategy via `getRelevanceOverride()`:
 
 **Tier 1 — Stored ingestion-time score (normal path)**: Items ingested after ADR-004 have `relevance_score`, `relevance_rationale`, and `competency_codes` stored on the `ingested_items` row. The materializer reads these directly — **no AI call required**.
 
-**Tier 2 — Legacy AI scoring (fallback)**: Items with `relevance_score IS NULL` (ingested before ADR-004) fall back to the original `scoreLegacyItem()` path, which:
-1. Builds `ObservationSummary[]` from the item's observations
-2. Gathers entity context from resolved `entity_profiles`
-3. Calls `SignalRelevanceScorer.score()` with full context (content + observations + entity profiles)
-4. Returns `{ score, rationale, competencyCodes }`
+**Tier 2 — Legacy fallback**: Items with `relevance_score IS NULL` (ingested before ADR-004) use entity relevance scores from `entity_profiles` as a fallback via `findRelevanceScores()`.
 
-### 4c. Materialize signal
+### 5c. Materialize signal
 
 The pure function `materializeSignal()` transforms an `IngestedItemWithObservations` into a `MaterializedSignal` by:
 
 1. **title**: First observation's summary (or truncated content)
 2. **type**: Derived from primary observation type (`contract_award` → `opportunity`, `budget_signal` → `strategy`, `partnership` → `competitor`)
 3. **branch**: First agency entity's name
-4. **relevance**: From relevance override (stored score or AI-scored)
+4. **relevance**: From relevance override (stored score or entity scores)
 5. **relevanceRationale**: From relevance override
 6. **tags**: Unique technology entity names
 7. **vendors**: Companies with `subject` role
@@ -394,7 +437,7 @@ The pure function `materializeSignal()` transforms an `IngestedItemWithObservati
 10. **entities**: All entity mentions with confidence (1.0 if resolved, 0.5 if not)
 11. **competencies**: Competency codes from relevance override
 
-### 4d. Upsert to signals table
+### 5d. Upsert to signals table
 
 ```
 signals
@@ -421,9 +464,7 @@ signals
 └── updated_at
 ```
 
-### 4e. Self-scheduling for batches
-
-If there are remaining unmaterialized items, the agent calls `this.queue("materializeNew", {})` to enqueue the next batch. Self-scheduling only continues if the current batch made progress (materialized > 0). This is the terminal stage — no further chaining.
+This is the terminal stage — no further chaining.
 
 ---
 
@@ -441,15 +482,16 @@ If there are remaining unmaterialized items, the agent calls `this.queue("materi
 
 2. `diagnoseStuckStages(status)` identifies stages with pending work
 
-3. For each stuck stage, kicks the responsible agent:
-   - `entity_resolution` → `agent.runResolution()` (queries DB for unresolved entities)
-   - `synthesis` → `agent.synthesizeProfiles([])` (empty array → agent self-queries DB)
-   - `enrichment` → `agent.enrichProfiles([])` (empty array → agent self-queries DB)
-   - `signal_materialization` → `agent.materializeNew()` (queries DB for unmaterialized items)
+3. For each stuck stage, dispatches recovery via queue messages:
+   - `entity_resolution` → Queries unresolved `observation_entities`, groups by `observation_id`, sends `ResolutionMessage` per observation to `RESOLUTION_QUEUE`
+   - `synthesis` → `dispatchOnDemandJob("synthesis")` — queries `findUnsynthesizedProfileIds()`, sends `SynthesisMessage` per profile to `SYNTHESIS_QUEUE`
+   - `enrichment` → `dispatchOnDemandJob("enrichment")` — queries `findPendingEnrichmentProfiles()`, sends `EnrichmentMessage` per profile to `ENRICHMENT_QUEUE`
+   - `signal_materialization` → `dispatchOnDemandJob("signal_materialization")` — queries `findUnmaterializedItemIds()`, sends `MaterializationMessage` per item to `MATERIALIZATION_QUEUE`
 
-**Agent self-query pattern (ADR-004)**: Recovery and on-demand callers pass empty arrays to agents. Agents detect the empty payload and query the database for their own pending work. This eliminates unbounded ID arrays that previously caused D1 bind parameter limit errors (>100 IDs in `IN` clause).
-
-**On-demand jobs** (`POST /cron/:jobName`): `entity_resolution`, `synthesis`, `enrichment`, `signal_materialization` — all use the same empty-payload kick pattern. Ingestion jobs (`rss`, `sam_gov`, `fpds`) dispatch to the ObservationExtractorAgent normally.
+**On-demand jobs** (`POST /cron/:jobName`):
+- Ingestion jobs (`rss`, `sam_gov`, `fpds`) → send `IngestionMessage` to `INGESTION_QUEUE`
+- `synthesis`, `enrichment`, `signal_materialization` → `dispatchOnDemandJob()` scans DB for pending work and produces individual queue messages
+- `entity_resolution` → Cannot be triggered on-demand (throws error — requires observation-level data that can't be reconstructed from a DB scan; use recovery instead)
 
 ---
 
@@ -459,42 +501,69 @@ If there are remaining unmaterialized items, the agent calls `this.queue("materi
 External Source (RSS/SAM.gov/FPDS)
     |
     v
-SignalAnalysisInput (in-memory)
+INGESTION_QUEUE
     |
     v
-ingested_items table (raw content, deduplicated by source_link)
+ingestion-consumer: fetch → dedup → store → produce ExtractionMessages
     |
-    v [AI: ObservationExtractor]
-observations table (typed facts: contract_award, solicitation, etc.)
-observation_entities table (raw entity mentions: person, agency, company)
+    v
+EXTRACTION_QUEUE
     |
-    v [Fetch: PageFetcher — best-effort source page]
-    v [AI: SignalRelevanceScorer — early gate]
-ingested_items.relevance_score (0-100, stored for audit)
+    v
+extraction-consumer: AI extract observations → fetch page → AI score relevance → store score
     |
-    score >= RELEVANCE_THRESHOLD (default: 60)?
+    v
+score >= RELEVANCE_THRESHOLD (default: 60)?
     |                               |
    No                              Yes
     |                               |
-  (stop)                            v [AI: EntityResolver + entity-match-ai]
-                                    entity_profiles table (canonical entities with aliases)
-                                    entity_aliases table (name variants)
-                                    observation_entities.entity_profile_id (linked)
-                                        |
-                                        +---> [AI: ProfileSynthesizer]
-                                        |     entity_profiles (summary, trajectory, relevance_score updated)
-                                        |     insights table (competitor_assessment, opportunity_alert, etc.)
-                                        |         |
-                                        |         v [materializeSignal() — uses stored relevance score]
-                                        |         signals table (materialized, UI-ready)
-                                        |
-                                        +---> [AI: BraveSearcher + DossierExtractor]
-                                              entity_profiles.dossier (enriched biographical/organizational data)
+  (stop)                            v
+                          produce ResolutionMessages (1 per observation)
+                                    |
+                                    v
+                          RESOLUTION_QUEUE
+                                    |
+                                    v
+                          resolution-consumer: resolve entities → fan-out
+                                    |
+                                    +---> SYNTHESIS_QUEUE (1 msg per resolved profile)
+                                    |         |
+                                    |         v
+                                    |     synthesis-consumer: AI synthesize → store insights
+                                    |         |
+                                    |         v
+                                    |     produce MaterializationMessages (per linked ingested item)
+                                    |         |
+                                    |         v
+                                    |     MATERIALIZATION_QUEUE
+                                    |         |
+                                    |         v
+                                    |     materialization-consumer: materializeSignal() → upsert
+                                    |         |
+                                    |         v
+                                    |     signals table (GET /signals)
+                                    |
+                                    +---> ENRICHMENT_QUEUE (1 msg per new enrichable profile)
+                                              |
+                                              v
+                                          enrichment-consumer: search → fetch → AI dossier → store
+                                              |
+                                              v
+                                          entity_profiles.dossier (enriched data)
 ```
 
-## Batch Sizes & Limits
+## Queue Configuration & Batch Sizes
 
-Each stage has configurable limits that control throughput and avoid timeouts:
+| Queue | max_batch_size | max_retries | DLQ | Rationale |
+|-------|---------------|-------------|-----|-----------|
+| Ingestion | 1 | 3 | `overwatch-dlq` | Each source fetch is heavy (multiple API pages) |
+| Extraction | 5 | 3 | `overwatch-dlq` | AI calls are moderate; batching reduces cold starts |
+| Resolution | 10 | 3 | `overwatch-dlq` | Resolution is fast (DB lookups + occasional AI fuzzy match) |
+| Synthesis | 5 | 3 | `overwatch-dlq` | AI synthesis is moderate weight |
+| Enrichment | 1 | 3 | `overwatch-dlq` | External HTTP (Brave Search + page fetches) is slow/flaky |
+| Materialization | 10 | 3 | `overwatch-dlq` | Pure function + DB upsert, very fast |
+
+## Other Limits
 
 | Component | Constant | Value | Location | Notes |
 |-----------|----------|-------|----------|-------|
@@ -502,16 +571,11 @@ Each stage has configurable limits that control throughput and avoid timeouts:
 | **SAM.gov fetcher** | `MAX_PAGES` | 2 | `src/signals/sam-gov/sam-gov-fetcher.ts` | Max pages per fetch (200 items max) |
 | **FPDS fetcher** | `maxPages` | 5 | `src/signals/fpds/fpds-contracts-fetcher.ts` | Max ATOM feed pages (follows `next` links) |
 | **RSS fetcher** | — | unbounded | `src/signals/rss/rss-fetcher.ts` | Fetches all items from each feed (currently 2 feeds) |
-| **Source page fetch** | `DEFAULT_MAX_LENGTH` | 5,000 chars | `src/enrichment/page-fetcher.ts` | Max extracted text per source page (used for early relevance scoring) |
+| **Source page fetch** | `DEFAULT_MAX_LENGTH` | 5,000 chars | `src/enrichment/page-fetcher.ts` | Max extracted text per source page |
 | **Relevance threshold** | `RELEVANCE_THRESHOLD` | 60 | `wrangler.jsonc` (env var) | Items below this score are excluded from downstream processing |
 | **Brave Search** | `count` param | 20 | `src/enrichment/brave-searcher.ts` | Raw results fetched per query (filtered by blocked domains) |
 | **Brave Search** | `DEFAULT_MAX_RESULTS` | 5 | `src/enrichment/brave-searcher.ts` | Max results returned after filtering |
 | **Page Fetcher** | `DEFAULT_MAX_LENGTH` | 5,000 chars | `src/enrichment/page-fetcher.ts` | Max extracted text per page (enrichment) |
-| **Enrichment batch** | `BATCH_SIZE` | 10 | `src/enrichment/entity-enricher.ts` | Profiles per enrichment run (remaining IDs self-scheduled) |
-| **Synthesis batch** | `BATCH_SIZE` | 25 | `src/agents/synthesis-agent.ts` | Profiles per synthesis run (remaining IDs self-scheduled) |
-| **Materialization batch** | `BATCH_SIZE` | 10 | `src/agents/signal-materializer-agent.ts` | Items per materialization run |
-
-Agents that process batches (SynthesisAgent, EnrichmentAgent, SignalMaterializerAgent) self-schedule via `this.queue()` when remaining items exist, processing the next batch in a subsequent run.
 
 ## AI Calls Per Ingested Item
 
@@ -521,8 +585,8 @@ Each ingested item triggers a variable number of AI calls depending on whether i
 
 | Stage | AI Call | Model | Purpose |
 |-------|---------|-------|---------|
-| 1c | `ObservationExtractor.extract()` | Workers AI | Extract typed observations + entities from raw content |
-| 1f | `SignalRelevanceScorer.score()` | Workers AI | Score relevance to Amplify (early gate) |
+| 2a | `ObservationExtractor.extract()` | Workers AI | Extract typed observations + entities from raw content |
+| 2d | `SignalRelevanceScorer.score()` | Workers AI | Score relevance to Amplify (early gate) |
 
 Plus 1 optional HTTP fetch (source page via PageFetcher).
 
@@ -530,62 +594,52 @@ Plus 1 optional HTTP fetch (source page via PageFetcher).
 
 | Stage | AI Call | Model | Purpose |
 |-------|---------|-------|---------|
-| 1c | `ObservationExtractor.extract()` | Workers AI | Extract typed observations + entities from raw content |
-| 1f | `SignalRelevanceScorer.score()` | Workers AI | Score relevance to Amplify (early gate) |
-| 2c | `entity-match-ai` (per unresolved group) | Workers AI | Fuzzy match entity names to existing profiles |
-| 3a.3 | `ProfileSynthesizer.synthesize()` (per profile) | Workers AI | Generate summary, trajectory, relevance, insights |
-| 4b | — (stored score used) | — | **No AI call** — materializer trusts ingestion-time score |
+| 2a | `ObservationExtractor.extract()` | Workers AI | Extract typed observations + entities from raw content |
+| 2d | `SignalRelevanceScorer.score()` | Workers AI | Score relevance to Amplify (early gate) |
+| 3a | `entity-match-ai` (per unresolved group) | Workers AI | Fuzzy match entity names to existing profiles |
+| 4a.2 | `ProfileSynthesizer.synthesize()` (per profile) | Workers AI | Generate summary, trajectory, relevance, insights |
+| 5b | — (stored score used) | — | **No AI call** — materializer trusts ingestion-time score |
 
-**Legacy items** (ingested before ADR-004, `relevance_score IS NULL`): Stage 4b falls back to `SignalRelevanceScorer.score()` with full entity context.
+**Legacy items** (ingested before ADR-004, `relevance_score IS NULL`): Stage 5b falls back to entity relevance scores from `entity_profiles`.
 
-Entity enrichment (Stage 3b) adds additional AI calls per new profile but is independent of the main pipeline.
+Entity enrichment (Stage 4b) adds additional AI calls per new profile but is independent of the main pipeline.
 
-## Chaining Mechanism
+## Message Flow Mechanism
 
-All agent-to-agent communication uses the Cloudflare Agents [queue tasks API](https://developers.cloudflare.com/agents/api-reference/queue-tasks/):
+All inter-stage communication uses Cloudflare Queues. Each consumer function:
 
-```typescript
-// Upstream agent (e.g., ObservationExtractorAgent)
-const resolver = await getAgentByName<Env, EntityResolverAgent>(
-    this.env.ENTITY_RESOLVER,
-    "singleton",
-);
-await resolver.queue("runResolution", {}); // enqueues task, returns immediately
-```
+1. Receives a typed message (discriminated union on `type` field)
+2. Processes the work (AI calls, DB operations)
+3. Produces downstream messages by calling `env.<QUEUE_NAME>.send(msg)`
+4. Returns a result (ack'd by the queue handler in `index.ts`)
 
-`queue()` is a public method on the `Agent` base class. When called via RPC on a remote DO stub, it enqueues a task on the target agent. Key properties:
+**Error handling**: If a consumer throws, the queue handler catches the error, logs it, and calls `msg.retry()`. After `max_retries` (3), the message is moved to the dead-letter queue (`overwatch-dlq`).
 
-- **FIFO ordering** — tasks execute in order
-- **Persisted to SQLite** — tasks survive agent restarts
-- **Fire-and-forget** — the calling agent returns immediately after enqueuing
-- **Automatic cleanup** — successful tasks are removed from the queue
-- **Self-batching** — agents can call `this.queue("methodName", payload)` on themselves to process remaining work in subsequent runs (used by SynthesisAgent, EnrichmentAgent, and SignalMaterializerAgent)
-- **Typed payloads** — `queue()` accepts a payload argument passed to the target method. EntityResolverAgent passes `resolvedProfileIds` to SynthesisAgent and `newProfileIds` to EnrichmentAgent; both self-schedule with remaining IDs
-- **Empty-payload kicks** — Recovery and on-demand callers pass `[]` to Synthesis/Enrichment agents. Agents detect empty payloads and query the database for their own pending work (ADR-004 self-query pattern)
+**Dependency injection**: All consumers accept a `deps` object with interfaces for repositories, AI clients, queues, and loggers. Concrete implementations are wired in `buildQueueHandlers()` (`src/queues/build-handlers.ts`). This enables unit testing with mocks — no Workers runtime required.
 
 ## Relevance Gate Decision Logic
 
 The early relevance gate (ADR-004) is the key decision point in the pipeline. Here is the complete decision flow:
 
 ```
-Item ingested
+Item ingested (Stage 1)
     |
     v
-Observations extracted (AI)
+Observations extracted (AI, Stage 2a)
     |
     v
-Source page fetched (best-effort, may be null)
+Source page fetched (best-effort, may be null, Stage 2c)
     |
     v
-Relevance scored (AI, using content + page + observations)
+Relevance scored (AI, using content + page + observations, Stage 2d)
     |
     v
-Score stored on ingested_items row
+Score stored on ingested_items row (Stage 2e)
     |
     v
 score >= RELEVANCE_THRESHOLD?
     |
-    +--- Yes ---> Chain to EntityResolverAgent
+    +--- Yes ---> Produce ResolutionMessages to RESOLUTION_QUEUE
     |             (full pipeline: resolve → synthesize → enrich → materialize)
     |
     +--- No  ---> Stop. Item stored for audit.

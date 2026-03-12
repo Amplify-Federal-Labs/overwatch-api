@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { eq, isNull, sql } from "drizzle-orm";
 import { entityProfiles, entityAliases, entityRelationships, observationEntities, observations } from "./schema";
 import type { AliasSource } from "../schemas";
+import { UnresolvedGroup as DomainUnresolvedGroup } from "../domain/unresolved-group";
 
 export interface UnresolvedEntity {
 	id: number;
@@ -11,12 +12,7 @@ export interface UnresolvedEntity {
 	rawName: string;
 }
 
-export interface UnresolvedGroup {
-	normalizedName: string;
-	entityType: string;
-	mostCommonRawName: string;
-	entities: UnresolvedEntity[];
-}
+export type UnresolvedGroup = DomainUnresolvedGroup;
 
 export function buildEntityProfileRow(type: string, canonicalName: string) {
 	const now = new Date().toISOString();
@@ -68,43 +64,7 @@ export function buildEntityRelationshipRow(
 }
 
 export function groupUnresolvedByName(entities: UnresolvedEntity[]): UnresolvedGroup[] {
-	const map = new Map<string, UnresolvedEntity[]>();
-
-	for (const entity of entities) {
-		const key = entity.rawName.toLowerCase().trim();
-		const group = map.get(key);
-		if (group) {
-			group.push(entity);
-		} else {
-			map.set(key, [entity]);
-		}
-	}
-
-	const groups: UnresolvedGroup[] = [];
-	for (const [normalizedName, groupEntities] of map) {
-		// Pick the most common raw name variant
-		const nameCounts = new Map<string, number>();
-		for (const e of groupEntities) {
-			nameCounts.set(e.rawName, (nameCounts.get(e.rawName) ?? 0) + 1);
-		}
-		let mostCommonRawName = groupEntities[0].rawName;
-		let maxCount = 0;
-		for (const [name, count] of nameCounts) {
-			if (count > maxCount) {
-				maxCount = count;
-				mostCommonRawName = name;
-			}
-		}
-
-		groups.push({
-			normalizedName,
-			entityType: groupEntities[0].entityType,
-			mostCommonRawName,
-			entities: groupEntities,
-		});
-	}
-
-	return groups;
+	return DomainUnresolvedGroup.fromMentions(entities);
 }
 
 export class EntityProfileRepository {

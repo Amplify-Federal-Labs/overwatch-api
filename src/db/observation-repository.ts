@@ -97,6 +97,47 @@ export class ObservationRepository {
 		return count;
 	}
 
+	async findIngestedItemById(id: string) {
+		const row = await this.db
+			.select()
+			.from(ingestedItems)
+			.where(eq(ingestedItems.id, id))
+			.get();
+		return row ?? null;
+	}
+
+	async insertObservationsReturningIds(
+		ingestedItemId: string,
+		extractedObservations: ObservationExtraction[],
+	): Promise<Array<{ observationId: number; entities: Array<{ rawName: string; entityType: string; role: string }> }>> {
+		const result: Array<{ observationId: number; entities: Array<{ rawName: string; entityType: string; role: string }> }> = [];
+
+		for (const obs of extractedObservations) {
+			const row = buildObservationRow(ingestedItemId, obs);
+			const [inserted] = await this.db.insert(observations).values(row)
+				.returning({ id: observations.id });
+
+			const entityRefs: Array<{ rawName: string; entityType: string; role: string }> = [];
+			if (inserted && obs.entities.length > 0) {
+				const entityRows = buildEntityRefRows(inserted.id, obs.entities);
+				for (const entityRow of entityRows) {
+					await this.db.insert(observationEntities).values(entityRow).run();
+					entityRefs.push({
+						rawName: entityRow.rawName,
+						entityType: entityRow.entityType,
+						role: entityRow.role,
+					});
+				}
+			}
+
+			if (inserted) {
+				result.push({ observationId: inserted.id, entities: entityRefs });
+			}
+		}
+
+		return result;
+	}
+
 	async updateRelevanceScore(
 		itemId: string,
 		relevanceScore: number,

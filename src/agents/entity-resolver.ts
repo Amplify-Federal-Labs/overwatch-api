@@ -1,4 +1,5 @@
 import type { UnresolvedGroup } from "../db/entity-profile-repository";
+import type { FuzzyEntityMatchingService } from "../services/fuzzy-entity-matching";
 
 export interface EntityMatchResult {
 	match: string | null;
@@ -11,58 +12,52 @@ export interface ResolutionResult {
 	matchMethod: "exact_alias" | "ai_fuzzy" | "new";
 }
 
-interface ProfileWithAliases {
+export interface MatchableProfile {
 	id: string;
 	canonicalName: string;
 	type: string;
-	aliases: string[];
+	matchesAlias(name: string): boolean;
 }
 
 export type AiMatchFn = (name: string, candidates: string[], entityType: string) => Promise<EntityMatchResult>;
 
 export class EntityResolver {
-	private aiMatch: AiMatchFn;
+	private fuzzyMatcher: FuzzyEntityMatchingService;
 
-	constructor(aiMatch: AiMatchFn) {
-		this.aiMatch = aiMatch;
+	constructor(fuzzyMatcher: FuzzyEntityMatchingService) {
+		this.fuzzyMatcher = fuzzyMatcher;
 	}
 
 	async resolveGroup(
 		group: UnresolvedGroup,
-		existingProfiles: ProfileWithAliases[],
+		existingProfiles: MatchableProfile[],
 	): Promise<ResolutionResult> {
-		// Filter to same entity type
 		const sameTypeProfiles = existingProfiles.filter((p) => p.type === group.entityType);
 
-		// Step 1: exact alias match (case-insensitive)
-		const exactMatch = this.findExactAliasMatch(group.mostCommonRawName, sameTypeProfiles);
+		// Step 1: exact alias match via domain behavior
+		const exactMatch = sameTypeProfiles.find((p) => p.matchesAlias(group.mostCommonRawName));
 		if (exactMatch) {
-			return { profileId: exactMatch, isNew: false, matchMethod: "exact_alias" };
+			return { profileId: exactMatch.id, isNew: false, matchMethod: "exact_alias" };
 		}
 
 		// Step 2: AI fuzzy match (only if there are candidates)
 		if (sameTypeProfiles.length > 0) {
-			const candidates = sameTypeProfiles.map((p) => `${p.id}:${p.canonicalName}`);
-			const aiResult = await this.aiMatch(group.mostCommonRawName, candidates, group.entityType);
+			const candidates = sameTypeProfiles.map((p) => ({
+				id: p.id,
+				canonicalName: p.canonicalName,
+			}));
+			const result = await this.fuzzyMatcher.match(
+				group.mostCommonRawName,
+				group.entityType,
+				candidates,
+			);
 
-			if (aiResult.match) {
-				return { profileId: aiResult.match, isNew: false, matchMethod: "ai_fuzzy" };
+			if (result.matchedId) {
+				return { profileId: result.matchedId, isNew: false, matchMethod: "ai_fuzzy" };
 			}
 		}
 
 		// Step 3: new profile needed
 		return { profileId: null, isNew: true, matchMethod: "new" };
-	}
-
-	private findExactAliasMatch(name: string, profiles: ProfileWithAliases[]): string | null {
-		const normalized = name.toLowerCase().trim();
-		for (const profile of profiles) {
-			for (const alias of profile.aliases) {
-				if (alias.toLowerCase().trim() === normalized) {
-					return profile.id;
-				}
-			}
-		}
-		return null;
 	}
 }

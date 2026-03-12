@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { jsonrepair } from "jsonrepair";
 import type { Dossier, PersonDossier, AgencyDossier, CompanyDossier } from "../schemas";
+import type { DossierExtractionService } from "../services/dossier-extraction";
 
 const PERSON_PROMPT = `You are an intelligence analyst building a dossier on a government/defense person. Given web page text about this person, extract structured profile data.
 
@@ -150,7 +151,7 @@ export function parseDossierResponse(raw: string, entityType: string): Dossier |
 	}
 }
 
-export class DossierExtractor {
+export class DossierExtractor implements DossierExtractionService {
 	private client: OpenAI;
 	private model: string;
 

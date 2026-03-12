@@ -1,10 +1,14 @@
-import { getAgentByName } from "agents";
 import { diagnoseStuckStages, type PipelineStatus, type StuckStage } from "./recovery";
-import type { EntityResolverAgent } from "../agents/entity-resolver-agent";
-import type { SynthesisAgent } from "../agents/synthesis-agent";
-import type { EnrichmentAgent } from "../agents/enrichment-agent";
-import type { SignalMaterializerAgent } from "../agents/signal-materializer-agent";
-import { Logger } from "../logger";
+import type { AgentJob } from "./scheduler";
+import type { OnDemandResult } from "./scheduler";
+import type { ResolutionMessage } from "../queues/types";
+
+export interface UnresolvedEntity {
+	observationId: number;
+	rawName: string;
+	entityType: string;
+	role: string;
+}
 
 export interface RecoveryAction {
 	agentName: StuckStage["agentName"];
@@ -18,8 +22,49 @@ export interface RecoveryResult {
 	recoveryActions: RecoveryAction[];
 }
 
-export async function runRecovery(env: Env, status: PipelineStatus): Promise<RecoveryResult> {
-	const logger = new Logger(env.LOG_LEVEL);
+interface RecoveryLogger {
+	info(message: string, data?: Record<string, unknown>): void;
+	warn(message: string, data?: Record<string, unknown>): void;
+	error(message: string, data?: Record<string, unknown>): void;
+	debug(message: string, data?: Record<string, unknown>): void;
+}
+
+export interface RecoveryDeps {
+	dispatchOnDemandJob(agentName: AgentJob["agentName"]): Promise<OnDemandResult>;
+	findUnresolvedObservationEntities(): Promise<UnresolvedEntity[]>;
+	resolutionQueue: { send(msg: ResolutionMessage): Promise<void> };
+	logger: RecoveryLogger;
+}
+
+function groupEntitiesByObservation(
+	entities: UnresolvedEntity[],
+): Map<number, Array<{ rawName: string; entityType: string; role: string }>> {
+	const grouped = new Map<number, Array<{ rawName: string; entityType: string; role: string }>>();
+	for (const entity of entities) {
+		let group = grouped.get(entity.observationId);
+		if (!group) {
+			group = [];
+			grouped.set(entity.observationId, group);
+		}
+		group.push({ rawName: entity.rawName, entityType: entity.entityType, role: entity.role });
+	}
+	return grouped;
+}
+
+async function dispatchEntityResolution(deps: RecoveryDeps): Promise<void> {
+	const entities = await deps.findUnresolvedObservationEntities();
+	const grouped = groupEntitiesByObservation(entities);
+	for (const [observationId, entityGroup] of grouped) {
+		await deps.resolutionQueue.send({
+			type: "resolution",
+			observationId,
+			entities: entityGroup,
+		});
+	}
+}
+
+export async function runRecovery(status: PipelineStatus, deps: RecoveryDeps): Promise<RecoveryResult> {
+	const { logger } = deps;
 	const stuckStages = diagnoseStuckStages(status);
 
 	if (stuckStages.length === 0) {
@@ -35,7 +80,11 @@ export async function runRecovery(env: Env, status: PipelineStatus): Promise<Rec
 
 	for (const stage of stuckStages) {
 		try {
-			await dispatchRecovery(env, stage);
+			if (stage.agentName === "entity_resolution") {
+				await dispatchEntityResolution(deps);
+			} else {
+				await deps.dispatchOnDemandJob(stage.agentName);
+			}
 			recoveryActions.push({
 				agentName: stage.agentName,
 				reason: stage.reason,
@@ -55,41 +104,4 @@ export async function runRecovery(env: Env, status: PipelineStatus): Promise<Rec
 	}
 
 	return { stuckStages, recoveryActions };
-}
-
-async function dispatchRecovery(env: Env, stage: StuckStage): Promise<void> {
-	switch (stage.agentName) {
-		case "entity_resolution": {
-			const agent = await getAgentByName<Env, EntityResolverAgent>(
-				env.ENTITY_RESOLVER as unknown as DurableObjectNamespace<EntityResolverAgent>,
-				"singleton",
-			);
-			await agent.runResolution();
-			break;
-		}
-		case "synthesis": {
-			const agent = await getAgentByName<Env, SynthesisAgent>(
-				env.SYNTHESIS as unknown as DurableObjectNamespace<SynthesisAgent>,
-				"singleton",
-			);
-			await agent.synthesizeProfiles([]);
-			break;
-		}
-		case "enrichment": {
-			const agent = await getAgentByName<Env, EnrichmentAgent>(
-				env.ENRICHMENT as unknown as DurableObjectNamespace<EnrichmentAgent>,
-				"singleton",
-			);
-			await agent.enrichProfiles([]);
-			break;
-		}
-		case "signal_materialization": {
-			const agent = await getAgentByName<Env, SignalMaterializerAgent>(
-				env.SIGNAL_MATERIALIZER as unknown as DurableObjectNamespace<SignalMaterializerAgent>,
-				"singleton",
-			);
-			await agent.materializeNew();
-			break;
-		}
-	}
 }

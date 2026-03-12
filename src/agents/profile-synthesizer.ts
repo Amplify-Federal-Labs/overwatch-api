@@ -1,19 +1,14 @@
 import OpenAI from "openai";
 import { jsonrepair } from "jsonrepair";
 import { InsightTypeEnum } from "../schemas";
-import type { InsightType } from "../schemas";
+import type { InsightType } from "../domain/types";
+import type {
+	ProfileSynthesisService,
+	SynthesisOutput,
+	SynthesisInsight,
+} from "../services/profile-synthesis";
 
-export interface SynthesisInsight {
-	type: InsightType;
-	content: string;
-}
-
-export interface SynthesisOutput {
-	summary: string;
-	trajectory: string | null;
-	relevanceScore: number;
-	insights: SynthesisInsight[];
-}
+export type { SynthesisOutput, SynthesisInsight };
 
 const SYSTEM_PROMPT = `You are a strategic intelligence analyst for a government contracting firm (Amplify Federal). Given accumulated observations about an entity, synthesize an actionable profile.
 
@@ -92,7 +87,7 @@ export function parseSynthesisResponse(raw: string): SynthesisOutput {
 	return { summary, trajectory, relevanceScore, insights };
 }
 
-export class ProfileSynthesizer {
+export class ProfileSynthesizer implements ProfileSynthesisService {
 	private client: OpenAI;
 	private model: string;
 
