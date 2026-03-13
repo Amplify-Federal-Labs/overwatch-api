@@ -15,8 +15,8 @@ import { fetchRssFeed } from "../signals/rss/rss-fetcher";
 import { rssItemsToSignals } from "../signals/rss/rss-parser";
 import { fetchSamGovOpportunities, fetchApbiEvents } from "../signals/sam-gov/sam-gov-fetcher";
 import { opportunitiesToSignals } from "../signals/sam-gov/sam-gov-parser";
-import { fetchFpdsContracts } from "../signals/fpds/fpds-contracts-fetcher";
-import { entriesToSignals } from "../signals/fpds/fpds-contracts-parser";
+import { fetchContractAwards } from "../signals/contract-awards/contract-awards-fetcher";
+import { entriesToSignals } from "../signals/contract-awards/contract-awards-parser";
 import { RSS_FEEDS } from "../agents/rss-feeds";
 import { Logger } from "../logger";
 import { handleIngestion } from "./ingestion-consumer";
@@ -55,8 +55,8 @@ export function buildQueueHandlers(env: Env, logger: Logger): QueueHandlers {
 					]);
 					return opportunitiesToSignals([...opps, ...apbi]);
 				},
-				async fpds() {
-					return entriesToSignals(await fetchFpdsContracts(fetch, logger));
+				async contract_awards() {
+					return entriesToSignals(await fetchContractAwards(fetch, env.SAM_GOV_API_KEY, logger));
 				},
 			};
 

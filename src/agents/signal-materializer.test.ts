@@ -218,10 +218,10 @@ describe("materializeSignal", () => {
 	it("includes sourceMetadata when present", () => {
 		const itemWithMeta: IngestedItemWithObservations = {
 			...ITEM_WITH_CONTRACT_AWARD,
-			sourceMetadata: { sourceType: "fpds", piid: "W123", vendorName: "Booz Allen" },
+			sourceMetadata: { sourceType: "contract_awards", piid: "W123", vendorName: "Booz Allen" },
 		};
 		const result = materializeSignal(itemWithMeta, ENTITY_RELEVANCE);
-		expect(result.sourceMetadata).toEqual({ sourceType: "fpds", piid: "W123", vendorName: "Booz Allen" });
+		expect(result.sourceMetadata).toEqual({ sourceType: "contract_awards", piid: "W123", vendorName: "Booz Allen" });
 	});
 
 	it("sets competitors from non-subject company entities", () => {

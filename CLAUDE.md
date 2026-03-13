@@ -19,7 +19,7 @@ See `overwatch-web/CLAUDE.md` for full domain context (competency clusters, outr
 | Async Processing | Cloudflare Queues (6 queues, event-driven pipeline) |
 | AI | Cloudflare Workers AI (observation extraction, relevance scoring, synthesis, dossier extraction) |
 | Search | Brave Search API (entity enrichment) |
-| XML Parsing | fast-xml-parser (FPDS ATOM feeds, RSS) |
+| XML Parsing | fast-xml-parser (RSS feeds) |
 | Testing | Vitest (unit tests, colocated with source) |
 
 ## Project Structure
@@ -74,9 +74,9 @@ overwatch-api/
 │   │   └── materialization-consumer.ts        # materializeSignal() → upsert to signals table
 │   ├── signals/                              # Source-specific fetchers and parsers
 │   │   ├── types.ts                          # SignalSourceType, RssFeedConfig
-│   │   ├── fpds/
-│   │   │   ├── fpds-contracts-fetcher.ts     # FPDS.gov ATOM feed (3-day lookback, paginated)
-│   │   │   └── fpds-contracts-parser.ts      # XML → SignalAnalysisInput
+│   │   ├── contract-awards/
+│   │   │   ├── contract-awards-fetcher.ts    # SAM.gov Contract Awards API (3-day lookback, paginated)
+│   │   │   └── contract-awards-parser.ts     # JSON → SignalAnalysisInput
 │   │   ├── rss/
 │   │   │   ├── rss-fetcher.ts                # GovConWire + FedScoop RSS feeds
 │   │   │   └── rss-parser.ts                 # XML → SignalAnalysisInput
@@ -175,7 +175,7 @@ CRON (hourly) → INGESTION_QUEUE → EXTRACTION_QUEUE → RESOLUTION_QUEUE
                                       signals table
 ```
 
-1. **Ingestion** (`INGESTION_QUEUE`, batch 1) — Cron-triggered. Fetches raw content (FPDS, SAM.gov, RSS) → dedup by source_link → stores as `ingested_items` → produces ExtractionMessages
+1. **Ingestion** (`INGESTION_QUEUE`, batch 1) — Cron-triggered. Fetches raw content (SAM.gov Contract Awards, SAM.gov Opportunities, RSS) → dedup by source_link → stores as `ingested_items` → produces ExtractionMessages
 2. **Extraction** (`EXTRACTION_QUEUE`, batch 5) — AI extracts typed observations with entity mentions → fetches source page (best-effort) → AI scores relevance (0-100) → items scoring ≥ threshold produce ResolutionMessages; below-threshold items stop here (stored for audit)
 3. **Resolution** (`RESOLUTION_QUEUE`, batch 10) — Resolves raw entity names to canonical `entity_profiles` via exact alias match + AI fuzzy matching → fans out SynthesisMessages (all resolved profiles) + EnrichmentMessages (new enrichable profiles) in parallel
 4. **Synthesis** (`SYNTHESIS_QUEUE`, batch 5) — AI synthesizes observations into summaries, trajectories, relevance scores, and insights → produces MaterializationMessages for each linked ingested item
@@ -196,7 +196,7 @@ For the full processing lifecycle of an ingested item, see [docs/pipeline-proces
 
 ### Signal Materialization (ADR-002)
 Raw ingested content is separate from what the UI sees as "signals":
-- `ingested_items` table: raw content from FPDS, SAM.gov, RSS (with relevance score after extraction)
+- `ingested_items` table: raw content from SAM.gov Contract Awards, SAM.gov Opportunities, RSS (with relevance score after extraction)
 - `signals` table: materialized with `branch`, `type`, `relevance`, `tags`, `competitors`, `vendors`, `stakeholderIds`, `entities`
 - `GET /signals` queries the materialized table directly with DB-level filtering (branch, type, relevance) and sorting (relevance DESC)
 - Pure logic in `materializeSignal()` function, tested independently
@@ -225,13 +225,13 @@ Cloudflare Workers cron fires hourly (`0 * * * *`). The scheduler maps fixed UTC
 |----------|-----|
 | 0 (midnight) | RSS ingestion |
 | 1 | SAM.gov ingestion |
-| 2 | FPDS ingestion |
+| 2 | Contract awards ingestion (SAM.gov) |
 | 3+ | Pipeline recovery (detect & re-dispatch stuck stages) |
 
 All downstream processing (extraction, entity resolution, synthesis, enrichment, materialization) is triggered automatically via queue chaining after ingestion.
 
 **On-demand jobs** via `POST /cron/:jobName`:
-- Ingestion: `rss`, `sam_gov`, `fpds` → sends IngestionMessage to queue
+- Ingestion: `rss`, `sam_gov`, `contract_awards` → sends IngestionMessage to queue
 - Processing: `synthesis`, `enrichment`, `signal_materialization` → scans DB for pending work, produces individual queue messages
 - `entity_resolution` → cannot be triggered on-demand (requires observation-level data); use `recovery` instead
 - `recovery` → diagnoses stuck pipeline stages and dispatches queue messages for all stuck stages
@@ -286,7 +286,7 @@ Run `npm install` from the monorepo root to link workspaces.
 Most .mil and .gov sites (army.mil, navy.mil, af.mil, disa.mil, marines.mil, etc.) block non-browser HTTP requests with 403 Forbidden. **Direct HTML scraping of these sites is not viable and must never be attempted.**
 
 Viable ingestion methods (in priority order):
-1. **Structured APIs** — FPDS ATOM feed for contract awards (already built, primary signal source), SAM.gov (free key) for opportunities. USAspending.gov (no auth) is used for stakeholder dossier enrichment only, NOT as a signal source.
+1. **Structured APIs** — SAM.gov Contract Awards API for contract awards (already built, primary signal source), SAM.gov Opportunities API (free key) for solicitations/pre-solicitations. USAspending.gov (no auth) is used for stakeholder dossier enrichment only, NOT as a signal source.
 2. **RSS feeds** — defense.gov contracts, trade press (Defense One, Breaking Defense, Fed News Network, GovConWire, FedScoop — already built)
 3. **Google News RSS as .mil proxy** — `news.google.com/rss/search?q=site:army.mil+keyword` returns headlines from .mil content Google has already crawled. This is the primary workaround for branch-specific news.
 4. **Google Alerts RSS** — keyword monitoring (software factory, Platform One, IL5, IL6, STIG, DevSecOps, APFIT, Advana, Game Warden) scoped to .mil/.gov

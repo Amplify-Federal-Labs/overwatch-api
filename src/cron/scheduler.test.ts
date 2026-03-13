@@ -11,7 +11,7 @@ describe("INGESTION_SCHEDULE", () => {
 		expect(INGESTION_SCHEDULE.size).toBe(3);
 		expect(INGESTION_SCHEDULE.get(0)).toEqual({ name: "rss", kind: "ingestion", sourceType: "rss" });
 		expect(INGESTION_SCHEDULE.get(1)).toEqual({ name: "sam_gov", kind: "ingestion", sourceType: "sam_gov" });
-		expect(INGESTION_SCHEDULE.get(2)).toEqual({ name: "fpds", kind: "ingestion", sourceType: "fpds" });
+		expect(INGESTION_SCHEDULE.get(2)).toEqual({ name: "contract_awards", kind: "ingestion", sourceType: "contract_awards" });
 	});
 
 	it("does not include resolution, synthesis, enrichment, or materialization", () => {
@@ -34,9 +34,9 @@ describe("getScheduledJob", () => {
 		expect(job.name).toBe("sam_gov");
 	});
 
-	it("returns fpds at hour 2", () => {
+	it("returns contract_awards at hour 2", () => {
 		const job = getScheduledJob(2);
-		expect(job.name).toBe("fpds");
+		expect(job.name).toBe("contract_awards");
 	});
 
 	it("returns recovery for any non-ingestion hour", () => {
@@ -154,7 +154,7 @@ describe("findJobByName", () => {
 	it("finds ingestion jobs by name", () => {
 		expect(findJobByName("rss")).toEqual({ name: "rss", kind: "ingestion", sourceType: "rss" });
 		expect(findJobByName("sam_gov")).toEqual({ name: "sam_gov", kind: "ingestion", sourceType: "sam_gov" });
-		expect(findJobByName("fpds")).toEqual({ name: "fpds", kind: "ingestion", sourceType: "fpds" });
+		expect(findJobByName("contract_awards")).toEqual({ name: "contract_awards", kind: "ingestion", sourceType: "contract_awards" });
 	});
 
 	it("finds on-demand agent jobs by name", () => {

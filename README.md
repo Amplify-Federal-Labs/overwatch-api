@@ -85,7 +85,7 @@ All endpoints return `{ success: boolean, result: T }`.
 Raw content from government sources flows through an event-driven queue pipeline:
 
 ```
-Cron (hourly): 0:rss → 1:sam_gov → 2:fpds → 3+:recovery
+Cron (hourly): 0:rss → 1:sam_gov → 2:contract_awards → 3+:recovery
   → INGESTION_QUEUE        (fetch sources → dedup → store)
     → EXTRACTION_QUEUE     (AI extract observations → AI score relevance → gate)
       → RESOLUTION_QUEUE   (resolve entities → fan-out)
@@ -101,9 +101,9 @@ Cron (hourly): 0:rss → 1:sam_gov → 2:fpds → 3+:recovery
 
 ### Cron Schedule
 
-Hourly cron (`0 * * * *`): UTC hours 0-2 run source-specific ingestion (RSS, SAM.gov, FPDS). Hours 3+ run pipeline recovery (detects stuck stages and re-dispatches via queues). All downstream processing is triggered automatically via queue chaining.
+Hourly cron (`0 * * * *`): UTC hours 0-2 run source-specific ingestion (RSS, SAM.gov Opportunities, SAM.gov Contract Awards). Hours 3+ run pipeline recovery (detects stuck stages and re-dispatches via queues). All downstream processing is triggered automatically via queue chaining.
 
-**On-demand**: `POST /cron/:jobName` supports `rss`, `sam_gov`, `fpds` (ingestion), `synthesis`, `enrichment`, `signal_materialization` (scans DB for pending work), and `recovery`.
+**On-demand**: `POST /cron/:jobName` supports `rss`, `sam_gov`, `contract_awards` (ingestion), `synthesis`, `enrichment`, `signal_materialization` (scans DB for pending work), and `recovery`.
 
 For the complete processing lifecycle with table schemas, AI calls, and data flow, see [docs/pipeline-processing-report.md](docs/pipeline-processing-report.md).
 

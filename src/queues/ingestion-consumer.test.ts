@@ -15,7 +15,7 @@ describe("ingestion-consumer", () => {
 		fetchers: {
 			rss: vi.fn(),
 			sam_gov: vi.fn(),
-			fpds: vi.fn(),
+			contract_awards: vi.fn(),
 		},
 		logger: {
 			info: vi.fn(),
@@ -71,15 +71,15 @@ describe("ingestion-consumer", () => {
 
 	it("should skip duplicates and not produce extraction messages for them", async () => {
 		const items: SignalAnalysisInput[] = [
-			{ content: "New item", sourceType: "fpds", sourceName: "FPDS", sourceLink: "https://fpds.gov/1" },
-			{ content: "Duplicate", sourceType: "fpds", sourceName: "FPDS", sourceLink: "https://fpds.gov/2" },
+			{ content: "New item", sourceType: "contract_awards", sourceName: "SAM.gov Contract Awards", sourceLink: "contract-award://1" },
+			{ content: "Duplicate", sourceType: "contract_awards", sourceName: "SAM.gov Contract Awards", sourceLink: "contract-award://2" },
 		];
-		baseDeps.fetchers.fpds.mockResolvedValue(items);
+		baseDeps.fetchers.contract_awards.mockResolvedValue(items);
 		baseDeps.repository.insertIngestedItem
 			.mockResolvedValueOnce("item-1")
 			.mockResolvedValueOnce(null); // duplicate
 
-		const result = await handleIngestion("fpds", baseDeps);
+		const result = await handleIngestion("contract_awards", baseDeps);
 
 		expect(result.itemsStored).toBe(1);
 		expect(result.itemsSkipped).toBe(1);

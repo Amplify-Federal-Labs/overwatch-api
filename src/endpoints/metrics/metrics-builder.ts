@@ -37,7 +37,7 @@ export interface MetricsResult {
 	summary: string[];
 }
 
-const EXPECTED_SOURCES = ["rss", "sam_gov", "fpds"];
+const EXPECTED_SOURCES = ["rss", "sam_gov", "contract_awards"];
 
 export function buildMetrics(input: MetricsInput): MetricsResult {
 	const summary: string[] = [];

@@ -2,7 +2,7 @@ import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core
 import type { Dossier } from "../schemas/dossier";
 import type { MaterializedSignalEntity } from "../agents/signal-materializer";
 
-// Ingested items: raw content from external sources (FPDS, SAM.gov, RSS)
+// Ingested items: raw content from external sources (SAM.gov Contract Awards, SAM.gov Opportunities, RSS)
 export const ingestedItems = sqliteTable("ingested_items", {
 	id: text("id").primaryKey().notNull(),
 	sourceType: text("source_type").notNull(),

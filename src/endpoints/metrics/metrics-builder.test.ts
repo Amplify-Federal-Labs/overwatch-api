@@ -74,10 +74,10 @@ describe("buildMetrics", () => {
 		expect(result.summary.every((s) => typeof s === "string")).toBe(true);
 	});
 
-	it("flags FPDS as dark when missing from ingestion sources", () => {
+	it("flags contract_awards as dark when missing from ingestion sources", () => {
 		const result = buildMetrics(input);
 
-		expect(result.summary.some((s) => s.toLowerCase().includes("fpds"))).toBe(true);
+		expect(result.summary.some((s) => s.toLowerCase().includes("contract_awards"))).toBe(true);
 	});
 
 	it("flags pending enrichment when count is high", () => {

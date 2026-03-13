@@ -6,7 +6,7 @@ This document traces the complete lifecycle of an ingested item through the Over
 
 ```
                           CRON (hourly, 0 * * * *)
-                          0:rss -> 1:sam_gov -> 2:fpds -> 3+:recovery
+                          0:rss -> 1:sam_gov -> 2:contract_awards -> 3+:recovery
                                   |
                                   v
                      INGESTION_QUEUE (max_batch: 1)
@@ -113,7 +113,7 @@ type QueueMessage =
 |----------|---------|------------------|
 | 0 (midnight) | `rss`     | GovConWire, FedScoop RSS feeds |
 | 1           | `sam_gov` | SAM.gov opportunities + APBI events |
-| 2           | `fpds`    | FPDS.gov ATOM feed (DoD contract awards) |
+| 2           | `contract_awards` | SAM.gov Contract Awards API (DoD contract awards) |
 | 3+          | `recovery` | Pipeline recovery (see Recovery section) |
 
 **Cron handler**: `runCronJob()` sends an `IngestionMessage` to `INGESTION_QUEUE`.
@@ -130,7 +130,7 @@ The consumer dispatches to source-specific fetchers based on `source`:
 |--------|---------|--------|--------|
 | `rss` | `fetchRssFeed()` (`src/signals/rss/rss-fetcher.ts`) | `rssItemsToSignals()` (`src/signals/rss/rss-parser.ts`) | `SignalAnalysisInput[]` |
 | `sam_gov` | `fetchSamGovOpportunities()` + `fetchApbiEvents()` (`src/signals/sam-gov/sam-gov-fetcher.ts`) | `opportunitiesToSignals()` (`src/signals/sam-gov/sam-gov-parser.ts`) | `SignalAnalysisInput[]` |
-| `fpds` | `fetchFpdsContracts()` (`src/signals/fpds/fpds-contracts-fetcher.ts`) | `entriesToSignals()` (`src/signals/fpds/fpds-contracts-parser.ts`) | `SignalAnalysisInput[]` |
+| `contract_awards` | `fetchContractAwards()` (`src/signals/contract-awards/contract-awards-fetcher.ts`) | `entriesToSignals()` (`src/signals/contract-awards/contract-awards-parser.ts`) | `SignalAnalysisInput[]` |
 
 Each fetcher returns a `SignalAnalysisInput` with fields: `content`, `sourceType`, `sourceName`, `sourceUrl`, `sourceLink`, and optional `sourceMetadata`.
 
@@ -141,7 +141,7 @@ For each `SignalAnalysisInput`, the `ObservationRepository` (`src/db/observation
 ```
 ingested_items
 ├── id                  (UUID, primary key)
-├── source_type         ("rss" | "sam_gov" | "fpds")
+├── source_type         ("rss" | "sam_gov" | "contract_awards")
 ├── source_name         ("GovConWire", "SAM.gov", etc.)
 ├── source_url          (original URL)
 ├── source_link         (unique, used for deduplication)
@@ -489,7 +489,7 @@ This is the terminal stage — no further chaining.
    - `signal_materialization` → `dispatchOnDemandJob("signal_materialization")` — queries `findUnmaterializedItemIds()`, sends `MaterializationMessage` per item to `MATERIALIZATION_QUEUE`
 
 **On-demand jobs** (`POST /cron/:jobName`):
-- Ingestion jobs (`rss`, `sam_gov`, `fpds`) → send `IngestionMessage` to `INGESTION_QUEUE`
+- Ingestion jobs (`rss`, `sam_gov`, `contract_awards`) → send `IngestionMessage` to `INGESTION_QUEUE`
 - `synthesis`, `enrichment`, `signal_materialization` → `dispatchOnDemandJob()` scans DB for pending work and produces individual queue messages
 - `entity_resolution` → Cannot be triggered on-demand (throws error — requires observation-level data that can't be reconstructed from a DB scan; use recovery instead)
 
@@ -498,7 +498,7 @@ This is the terminal stage — no further chaining.
 ## Data Flow Summary
 
 ```
-External Source (RSS/SAM.gov/FPDS)
+External Source (RSS/SAM.gov Opportunities/SAM.gov Contract Awards)
     |
     v
 INGESTION_QUEUE
@@ -569,7 +569,7 @@ score >= RELEVANCE_THRESHOLD (default: 60)?
 |-----------|----------|-------|----------|-------|
 | **SAM.gov fetcher** | `PAGE_LIMIT` | 100 | `src/signals/sam-gov/sam-gov-fetcher.ts` | Items per API page |
 | **SAM.gov fetcher** | `MAX_PAGES` | 2 | `src/signals/sam-gov/sam-gov-fetcher.ts` | Max pages per fetch (200 items max) |
-| **FPDS fetcher** | `maxPages` | 5 | `src/signals/fpds/fpds-contracts-fetcher.ts` | Max ATOM feed pages (follows `next` links) |
+| **Contract Awards fetcher** | `MAX_PAGES` | 5 | `src/signals/contract-awards/contract-awards-fetcher.ts` | Max API pages (offset-based pagination) |
 | **RSS fetcher** | — | unbounded | `src/signals/rss/rss-fetcher.ts` | Fetches all items from each feed (currently 2 feeds) |
 | **Source page fetch** | `DEFAULT_MAX_LENGTH` | 5,000 chars | `src/enrichment/page-fetcher.ts` | Max extracted text per source page |
 | **Relevance threshold** | `RELEVANCE_THRESHOLD` | 60 | `wrangler.jsonc` (env var) | Items below this score are excluded from downstream processing |

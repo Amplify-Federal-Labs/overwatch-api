@@ -22,7 +22,7 @@ export type CronJob = IngestionJob | AgentJob | RecoveryJob;
 export const INGESTION_SCHEDULE: ReadonlyMap<number, IngestionJob> = new Map([
 	[0, { name: "rss", kind: "ingestion", sourceType: "rss" }],
 	[1, { name: "sam_gov", kind: "ingestion", sourceType: "sam_gov" }],
-	[2, { name: "fpds", kind: "ingestion", sourceType: "fpds" }],
+	[2, { name: "contract_awards", kind: "ingestion", sourceType: "contract_awards" }],
 ]);
 
 export const ON_DEMAND_JOBS: ReadonlyMap<string, AgentJob> = new Map([

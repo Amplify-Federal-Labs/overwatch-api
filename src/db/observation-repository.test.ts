@@ -51,10 +51,10 @@ describe("buildIngestedItemRow", () => {
 	it("should include source metadata when present", () => {
 		const input: SignalAnalysisInput = {
 			content: "Test",
-			sourceType: "fpds",
-			sourceName: "FPDS",
+			sourceType: "contract_awards",
+			sourceName: "SAM.gov Contract Awards",
 			sourceMetadata: {
-				sourceType: "fpds",
+				sourceType: "contract_awards",
 				piid: "W123",
 				modNumber: "0",
 				agencyId: "1234",

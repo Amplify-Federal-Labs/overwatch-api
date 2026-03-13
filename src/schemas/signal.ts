@@ -4,7 +4,7 @@ export const SignalSourceTypeEnum = z.enum([
 	"sam_gov",
 	"rss",
 	"mil_announcement",
-	"fpds",
+	"contract_awards",
 ]);
 export type SignalSourceType = z.infer<typeof SignalSourceTypeEnum>;
 

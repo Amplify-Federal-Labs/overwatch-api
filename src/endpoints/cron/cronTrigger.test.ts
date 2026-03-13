@@ -10,7 +10,7 @@ vi.mock("../../cron/scheduler", () => ({
 		const jobs: Record<string, unknown> = {
 			rss: { name: "rss", kind: "ingestion", sourceType: "rss" },
 			sam_gov: { name: "sam_gov", kind: "ingestion", sourceType: "sam_gov" },
-			fpds: { name: "fpds", kind: "ingestion", sourceType: "fpds" },
+			contract_awards: { name: "contract_awards", kind: "ingestion", sourceType: "contract_awards" },
 			synthesis: { name: "synthesis", kind: "agent", agentName: "synthesis" },
 		};
 		return jobs[name] ?? null;
@@ -33,12 +33,12 @@ describe("CronTrigger", () => {
 		mockRunCronJob.mockResolvedValue({ signalsFound: 5 });
 
 		const app = buildApp();
-		const res = await app.request("/fpds", { method: "POST" });
+		const res = await app.request("/contract_awards", { method: "POST" });
 		const body = await res.json<{ success: boolean; result: { jobName: string; output: unknown } }>();
 
 		expect(res.status).toBe(200);
 		expect(body.success).toBe(true);
-		expect(body.result.jobName).toBe("fpds");
+		expect(body.result.jobName).toBe("contract_awards");
 		expect(body.result.output).toEqual({ signalsFound: 5 });
 	});
 
@@ -55,7 +55,7 @@ describe("CronTrigger", () => {
 		mockRunCronJob.mockRejectedValue(new Error("fetch failed"));
 
 		const app = buildApp();
-		const res = await app.request("/fpds", { method: "POST" });
+		const res = await app.request("/contract_awards", { method: "POST" });
 		const body = await res.json<{ success: boolean; errors: { message: string }[] }>();
 
 		expect(res.status).toBe(500);
