@@ -8,57 +8,78 @@ import {
 import type { ContractAwardEntry } from "./contract-awards-parser";
 
 const SAMPLE_RESPONSE = {
-	totalRecords: 2,
-	limit: 100,
-	offset: 0,
-	data: [
+	totalRecords: "2",
+	limit: "100",
+	offset: "0",
+	awardSummary: [
 		{
 			contractId: {
-				PIID: "0001",
-				modNumber: "15",
-				agencyID: "9700",
-				referencedIDVPIID: "W911W617D0001",
+				subtier: { code: "9700", name: "DEPT OF DEFENSE" },
+				piid: "0001",
+				modificationNumber: "15",
 				transactionNumber: "0",
+				referencedIDVSubtier: { code: "9700", name: "DEPT OF DEFENSE" },
+				referencedIDVPiid: "W911W617D0001",
 			},
 			coreData: {
-				contractingOfficeAgencyID: "2100",
-				contractingOfficeAgencyName: "DEPT OF THE ARMY",
-				contractActionType: "C",
-				contractActionTypeDescription: "DELIVERY ORDER",
-				descriptionOfContractRequirement:
-					"ADAPTIVE DIGITAL AUTOMATED PILOTAGE TECHNOLOGY ADAPT FLIGHT CONTROL DEMONSTRATION.",
-				principalNAICSCode: "541712",
-				principalNAICSDescription:
-					"RESEARCH AND DEVELOPMENT IN PHYSICAL ENGINEERING AND LIFE SCIENCES",
-				productOrServiceCode: "AC12",
-				productOrServiceDescription: "NATIONAL DEFENSE R&D SERVICES",
-				extentCompeted: "A",
-				extentCompetedDescription: "FULL AND OPEN COMPETITION",
+				awardOrIDVType: { code: "C", name: "DELIVERY ORDER" },
+				federalOrganization: {
+					contractingInformation: {
+						contractingSubtier: { code: "2100", name: "DEPT OF THE ARMY" },
+					},
+				},
+				principalPlaceOfPerformance: {
+					state: { code: "PA", name: "PENNSYLVANIA" },
+				},
+				productOrServiceInformation: {
+					principalNaics: [
+						{
+							code: "541712",
+							name: "RESEARCH AND DEVELOPMENT IN PHYSICAL ENGINEERING AND LIFE SCIENCES",
+						},
+					],
+					productOrService: {
+						code: "AC12",
+						name: "NATIONAL DEFENSE R&D SERVICES",
+					},
+				},
+				competitionInformation: {
+					extentCompeted: { code: "A", name: "FULL AND OPEN COMPETITION" },
+				},
 			},
 			awardDetails: {
-				vendorName: "PIASECKI AIRCRAFT CORPORATION",
-				obligatedAmount: "0.00",
-				totalObligatedAmount: "38847444.67",
-				signedDate: "2025-12-01",
-				stateCode: "PA",
-				stateName: "PENNSYLVANIA",
+				dates: { dateSigned: "2025-12-01T00:00:00Z" },
+				dollars: { actionObligation: "0.00" },
+				totalContractDollars: { totalActionObligation: "38847444.67" },
+				productOrServiceInformation: {
+					descriptionOfContractRequirement:
+						"ADAPTIVE DIGITAL AUTOMATED PILOTAGE TECHNOLOGY ADAPT FLIGHT CONTROL DEMONSTRATION.",
+				},
+				awardeeData: {
+					awardeeHeader: { awardeeName: "PIASECKI AIRCRAFT CORPORATION" },
+				},
 			},
 		},
 		{
 			contractId: {
-				PIID: "FA8621",
-				modNumber: "0",
-				agencyID: "9700",
+				subtier: { code: "9700", name: "DEPT OF DEFENSE" },
+				piid: "FA8621",
+				modificationNumber: "0",
 				transactionNumber: "0",
 			},
 			coreData: {
-				contractingOfficeAgencyID: "5700",
-				contractingOfficeAgencyName: "DEPT OF THE AIR FORCE",
+				federalOrganization: {
+					contractingInformation: {
+						contractingSubtier: { code: "5700", name: "DEPT OF THE AIR FORCE" },
+					},
+				},
 			},
 			awardDetails: {
-				vendorName: "LOCKHEED MARTIN CORP",
-				obligatedAmount: "5000000.00",
-				totalObligatedAmount: "5000000.00",
+				dollars: { actionObligation: "5000000.00" },
+				totalContractDollars: { totalActionObligation: "5000000.00" },
+				awardeeData: {
+					awardeeHeader: { awardeeName: "LOCKHEED MARTIN CORP" },
+				},
 			},
 		},
 	],
@@ -87,7 +108,7 @@ describe("parseContractAwardsResponse", () => {
 		);
 		expect(entry.pscCode).toBe("AC12");
 		expect(entry.pscDescription).toBe("NATIONAL DEFENSE R&D SERVICES");
-		expect(entry.signedDate).toBe("2025-12-01");
+		expect(entry.signedDate).toBe("2025-12-01T00:00:00Z");
 		expect(entry.performanceState).toBe("PENNSYLVANIA");
 		expect(entry.contractType).toBe("DELIVERY ORDER");
 		expect(entry.competitionType).toBe("FULL AND OPEN COMPETITION");
@@ -109,14 +130,14 @@ describe("parseContractAwardsResponse", () => {
 
 	it("should return empty array for response with no data", () => {
 		expect(parseContractAwardsResponse({})).toEqual([]);
-		expect(parseContractAwardsResponse({ data: [] })).toEqual([]);
+		expect(parseContractAwardsResponse({ awardSummary: [] })).toEqual([]);
 	});
 
 	it("should skip entries missing required contractId fields", () => {
 		const response = {
-			data: [
+			awardSummary: [
 				{
-					contractId: { PIID: "0001" },
+					contractId: { piid: "0001" },
 					coreData: {},
 					awardDetails: {},
 				},
@@ -128,22 +149,30 @@ describe("parseContractAwardsResponse", () => {
 
 	it("should filter out deleted records", () => {
 		const response = {
-			data: [
+			awardSummary: [
 				{
 					contractId: {
-						PIID: "DEL001",
-						modNumber: "0",
-						agencyID: "9700",
+						subtier: { code: "9700", name: "DEPT OF DEFENSE" },
+						piid: "DEL001",
+						modificationNumber: "0",
 					},
 					coreData: {
-						contractingOfficeAgencyName: "ARMY",
+						federalOrganization: {
+							contractingInformation: {
+								contractingSubtier: { code: "9700", name: "ARMY" },
+							},
+						},
 					},
 					awardDetails: {
-						vendorName: "DELETED VENDOR",
-						obligatedAmount: "0",
-						totalObligatedAmount: "0",
+						dollars: { actionObligation: "0" },
+						totalContractDollars: { totalActionObligation: "0" },
+						awardeeData: {
+							awardeeHeader: { awardeeName: "DELETED VENDOR" },
+						},
+						transactionData: {
+							status: { code: "D", name: "DELETED" },
+						},
 					},
-					deletedStatus: "yes",
 				},
 			],
 		};

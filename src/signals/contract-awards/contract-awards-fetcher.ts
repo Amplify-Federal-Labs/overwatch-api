@@ -17,16 +17,17 @@ export function buildContractAwardsUrl(apiKey: string, offset: number): string {
 	const now = new Date();
 	const from = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
-	const params = new URLSearchParams({
-		api_key: apiKey,
-		lastModifiedDate: `[${formatDate(from)},${formatDate(now)}]`,
-		contractingDepartmentCode: "9700",
-		modificationNumber: "0",
-		limit: String(PAGE_LIMIT),
-		offset: String(offset),
-	});
+	const dateRange = `[${formatDate(from)},${formatDate(now)}]`;
 
-	return `https://api.sam.gov/contract-awards/v1/search?${params}`;
+	return (
+		`https://api.sam.gov/contract-awards/v1/search` +
+		`?api_key=${encodeURIComponent(apiKey)}` +
+		`&lastModifiedDate=${dateRange}` +
+		`&contractingDepartmentCode=9700` +
+		`&modificationNumber=0` +
+		`&limit=${PAGE_LIMIT}` +
+		`&offset=${offset}`
+	);
 }
 
 export async function fetchContractAwards(

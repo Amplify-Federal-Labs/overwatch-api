@@ -4,35 +4,62 @@ import { Logger } from "../../logger";
 
 const logger = new Logger("ERROR");
 
+function makeRecord(piid: string, vendorName: string, agencyName: string) {
+	return {
+		contractId: {
+			subtier: { code: "9700", name: "DEPT OF DEFENSE" },
+			piid,
+			modificationNumber: "0",
+		},
+		coreData: {
+			federalOrganization: {
+				contractingInformation: {
+					contractingSubtier: { code: "2100", name: agencyName },
+				},
+			},
+		},
+		awardDetails: {
+			dollars: { actionObligation: "1000" },
+			totalContractDollars: { totalActionObligation: "1000" },
+			awardeeData: {
+				awardeeHeader: { awardeeName: vendorName },
+			},
+		},
+	};
+}
+
 const SAMPLE_RESPONSE = {
-	totalRecords: 1,
-	limit: 100,
-	offset: 0,
-	data: [
+	totalRecords: "1",
+	limit: "100",
+	offset: "0",
+	awardSummary: [
 		{
 			contractId: {
-				PIID: "0001",
-				modNumber: "15",
-				agencyID: "9700",
-				referencedIDVPIID: "W911W617D0001",
+				subtier: { code: "9700", name: "DEPT OF DEFENSE" },
+				piid: "0001",
+				modificationNumber: "15",
+				referencedIDVPiid: "W911W617D0001",
 				transactionNumber: "0",
 			},
 			coreData: {
-				contractingOfficeAgencyID: "2100",
-				contractingOfficeAgencyName: "DEPT OF THE ARMY",
-				contractActionTypeDescription: "DELIVERY ORDER",
-				descriptionOfContractRequirement: "ADAPTIVE DIGITAL AUTOMATED PILOTAGE TECHNOLOGY",
+				federalOrganization: {
+					contractingInformation: {
+						contractingSubtier: { code: "2100", name: "DEPT OF THE ARMY" },
+					},
+				},
 			},
 			awardDetails: {
-				vendorName: "PIASECKI AIRCRAFT CORPORATION",
-				obligatedAmount: "0.00",
-				totalObligatedAmount: "38847444.67",
+				dollars: { actionObligation: "0.00" },
+				totalContractDollars: { totalActionObligation: "38847444.67" },
+				awardeeData: {
+					awardeeHeader: { awardeeName: "PIASECKI AIRCRAFT CORPORATION" },
+				},
 			},
 		},
 	],
 };
 
-const EMPTY_RESPONSE = { totalRecords: 0, data: [] };
+const EMPTY_RESPONSE = { totalRecords: "0", awardSummary: [] };
 
 describe("buildContractAwardsUrl", () => {
 	it("should build URL with api_key, lastModifiedDate, contractingDepartmentCode, and limit", () => {
@@ -67,20 +94,16 @@ describe("fetchContractAwards", () => {
 
 	it("should paginate when first page returns full results", async () => {
 		const fullPage = {
-			totalRecords: 150,
-			data: Array.from({ length: 100 }, (_, i) => ({
-				contractId: { PIID: `PIID-${i}`, modNumber: "0", agencyID: "9700" },
-				coreData: { contractingOfficeAgencyName: "ARMY" },
-				awardDetails: { vendorName: `VENDOR-${i}`, obligatedAmount: "1000", totalObligatedAmount: "1000" },
-			})),
+			totalRecords: "150",
+			awardSummary: Array.from({ length: 100 }, (_, i) =>
+				makeRecord(`PIID-${i}`, `VENDOR-${i}`, "ARMY"),
+			),
 		};
 		const partialPage = {
-			totalRecords: 150,
-			data: Array.from({ length: 50 }, (_, i) => ({
-				contractId: { PIID: `PIID-${100 + i}`, modNumber: "0", agencyID: "9700" },
-				coreData: { contractingOfficeAgencyName: "ARMY" },
-				awardDetails: { vendorName: `VENDOR-${100 + i}`, obligatedAmount: "1000", totalObligatedAmount: "1000" },
-			})),
+			totalRecords: "150",
+			awardSummary: Array.from({ length: 50 }, (_, i) =>
+				makeRecord(`PIID-${100 + i}`, `VENDOR-${100 + i}`, "ARMY"),
+			),
 		};
 
 		const mockFetch = vi.fn()
@@ -95,12 +118,10 @@ describe("fetchContractAwards", () => {
 
 	it("should stop paginating after max pages", async () => {
 		const fullPage = (offset: number) => ({
-			totalRecords: 1000,
-			data: Array.from({ length: 100 }, (_, i) => ({
-				contractId: { PIID: `PIID-${offset + i}`, modNumber: "0", agencyID: "9700" },
-				coreData: { contractingOfficeAgencyName: "ARMY" },
-				awardDetails: { vendorName: `VENDOR`, obligatedAmount: "1000", totalObligatedAmount: "1000" },
-			})),
+			totalRecords: "1000",
+			awardSummary: Array.from({ length: 100 }, (_, i) =>
+				makeRecord(`PIID-${offset + i}`, "VENDOR", "ARMY"),
+			),
 		});
 
 		const mockFetch = vi.fn();

@@ -20,66 +20,96 @@ export interface ContractAwardEntry {
 	competitionType?: string;
 }
 
+interface CodeName {
+	code?: string;
+	name?: string;
+}
+
 interface RawRecord {
 	contractId?: {
-		PIID?: string;
-		modNumber?: string;
-		agencyID?: string;
-		referencedIDVPIID?: string;
+		subtier?: CodeName;
+		piid?: string;
+		modificationNumber?: string;
+		referencedIDVPiid?: string;
 	};
 	coreData?: {
-		contractingOfficeAgencyName?: string;
-		contractActionTypeDescription?: string;
-		descriptionOfContractRequirement?: string;
-		principalNAICSCode?: string;
-		principalNAICSDescription?: string;
-		productOrServiceCode?: string;
-		productOrServiceDescription?: string;
-		extentCompetedDescription?: string;
+		awardOrIDVType?: CodeName;
+		federalOrganization?: {
+			contractingInformation?: {
+				contractingSubtier?: CodeName;
+			};
+		};
+		principalPlaceOfPerformance?: {
+			state?: CodeName;
+		};
+		productOrServiceInformation?: {
+			principalNaics?: CodeName[];
+			productOrService?: CodeName;
+		};
+		competitionInformation?: {
+			extentCompeted?: CodeName;
+		};
 	};
 	awardDetails?: {
-		vendorName?: string;
-		obligatedAmount?: string;
-		totalObligatedAmount?: string;
-		signedDate?: string;
-		stateName?: string;
+		dates?: {
+			dateSigned?: string;
+		};
+		dollars?: {
+			actionObligation?: string;
+		};
+		totalContractDollars?: {
+			totalActionObligation?: string;
+		};
+		productOrServiceInformation?: {
+			descriptionOfContractRequirement?: string;
+		};
+		awardeeData?: {
+			awardeeHeader?: {
+				awardeeName?: string;
+			};
+		};
+		transactionData?: {
+			status?: CodeName;
+		};
 	};
-	deletedStatus?: string;
 }
 
 export function parseContractAwardsResponse(json: Record<string, unknown>): ContractAwardEntry[] {
-	const data = json.data as RawRecord[] | undefined;
+	const data = json.awardSummary as RawRecord[] | undefined;
 	if (!Array.isArray(data) || data.length === 0) return [];
 
 	const results: ContractAwardEntry[] = [];
 
 	for (const record of data) {
-		if (record.deletedStatus === "yes") continue;
+		const status = record.awardDetails?.transactionData?.status?.code;
+		if (status === "D") continue;
 
 		const cid = record.contractId;
-		if (!cid?.PIID || !cid.modNumber || !cid.agencyID) continue;
+		if (!cid?.piid || !cid.modificationNumber || !cid.subtier?.code) continue;
 
 		const core = record.coreData ?? {};
 		const award = record.awardDetails ?? {};
+		const naics = core.productOrServiceInformation?.principalNaics?.[0];
+		const psc = core.productOrServiceInformation?.productOrService;
 
 		results.push({
-			piid: cid.PIID,
-			modNumber: cid.modNumber,
-			referencedPiid: cid.referencedIDVPIID,
-			agencyId: cid.agencyID,
-			agencyName: core.contractingOfficeAgencyName ?? "",
-			vendorName: award.vendorName ?? "",
-			description: core.descriptionOfContractRequirement,
-			obligatedAmount: award.obligatedAmount ?? "0",
-			totalObligatedAmount: award.totalObligatedAmount ?? "0",
-			naicsCode: core.principalNAICSCode,
-			naicsDescription: core.principalNAICSDescription,
-			pscCode: core.productOrServiceCode,
-			pscDescription: core.productOrServiceDescription,
-			signedDate: award.signedDate,
-			performanceState: award.stateName,
-			contractType: core.contractActionTypeDescription,
-			competitionType: core.extentCompetedDescription,
+			piid: cid.piid,
+			modNumber: cid.modificationNumber,
+			referencedPiid: cid.referencedIDVPiid,
+			agencyId: cid.subtier.code,
+			agencyName: core.federalOrganization?.contractingInformation?.contractingSubtier?.name ?? "",
+			vendorName: award.awardeeData?.awardeeHeader?.awardeeName ?? "",
+			description: award.productOrServiceInformation?.descriptionOfContractRequirement,
+			obligatedAmount: award.dollars?.actionObligation ?? "0",
+			totalObligatedAmount: award.totalContractDollars?.totalActionObligation ?? "0",
+			naicsCode: naics?.code,
+			naicsDescription: naics?.name,
+			pscCode: psc?.code,
+			pscDescription: psc?.name,
+			signedDate: award.dates?.dateSigned,
+			performanceState: core.principalPlaceOfPerformance?.state?.name,
+			contractType: core.awardOrIDVType?.name,
+			competitionType: core.competitionInformation?.extentCompeted?.name,
 		});
 	}
 
